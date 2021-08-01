@@ -15,10 +15,9 @@ def tinkoff_file_parse(path, db_engine, user_id):
     df_for_sql.columns = ['date', 'amount', 'category', 'description']#, 'balance']
     
 
-    for k,v in db_engine.load_c_rules(user_id=user_id):
+    for k,v in db_engine.download_c_rules(user_id=user_id):
         df_for_sql.loc[df_for_sql['description'] == k,'category']=v
-
-
+        
     return df_for_sql
 
 class DB_Engine:
@@ -26,8 +25,17 @@ class DB_Engine:
         self.connector = create_engine(f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
         self.schema = schema
 
-    def load_c_rules(self, user_id, table='dictionary_categories'):
+    def download_c_rules(self, user_id, table='dictionary_categories'):
         return pd.read_sql(f'SELECT key, value FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector).values.tolist()
 
-    def load_regular(self, user_id, table='regular'):
+    def download_regular(self, user_id, table='regular'):
         return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
+
+    def download_costs(self, user_id, table='costs'):
+        return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY date', self.connector)
+    
+    def add_costs(self, data, user_id, table='costs'):
+        data = data[['date', 'amount', 'category', 'description', 'balance']].copy().sort_values('date')
+        data['user_id'] = [user_id]*len(data)
+        data.to_sql(table, self.connector, schema='icyb', if_exists='append', index=False)
+    

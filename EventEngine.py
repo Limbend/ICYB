@@ -3,24 +3,11 @@ import numpy as np
 from dateutil.relativedelta import relativedelta
 
 def get_balance_past(start, costs):
-    data = costs.shift(1).fillna(0).loc
-    
-    b = start
-    result = []
-    for i in costs.index:
-        b -= data[i]
-        result.append(b)
-        
-    return result
+    result = costs.cumsum()
+    return result + (start - result.iloc[-1])
 
-def get_balance_future(start, costs):    
-    b = start
-    result = []
-    for i in costs.index:
-        b += costs[i]
-        result.append(b)
-        
-    return result
+def get_balance_future(start, costs):
+    return costs.cumsum()+start
 
 def get_markers_regular(data, event):
     if event['search_f'] == 'description':
@@ -65,6 +52,7 @@ def get_updated_regular(data, regular_events, window_price=3, uniform_distributi
     return new_regular_events
 
 def get_regular_events(regular_events, g_start_date, g_end_date):
+
     result = []
     j_limit=1000    
     regular_events = regular_events.copy()
@@ -110,3 +98,23 @@ def get_regular_events(regular_events, g_start_date, g_end_date):
             raise Exception(f'The maximum number of iterations has been exceeded\n{regular_events.loc[i]}')
             
     return pd.DataFrame(result, columns = ['date', 'amount', 'category', 'description', 'balance']).sort_values('date').reset_index(drop=True)
+
+def get_full_costs_list(new_costs, db_engine, user_id):
+    old_costs = db_engine.download_costs(user_id)
+    old_costs['is_new'] = False
+    new_costs = new_costs.copy()
+    new_costs['is_new'] = True
+
+    return pd.concat([old_costs, new_costs]).drop_duplicates(subset=['date', 'amount']).sort_values('date')
+
+def save_new_costs(full_costs, db_engine, user_id):
+    if (len(full_costs[~full_costs['is_new']])>0) and \
+    (len(full_costs[full_costs['is_new']])>0) and \
+    (full_costs[~full_costs['is_new']].iloc[-1]['date'] > full_costs[full_costs['is_new']].iloc[0]['date']):
+
+        #todo позже добавить обработку этого события !!!
+        raise Exception(f'Events added retroactively were detected. Such a database update has not yet been implemented. The change has not been entered into the database!')
+
+    db_engine.add_costs(full_costs[full_costs['is_new']], user_id=user_id)
+    return (full_costs['is_new'].sum(), 0)
+
