@@ -1,0 +1,13 @@
+{
+    "bot_token": "",
+    "trusted_chat_id": ,
+
+    "db_connector":{
+        "ip": "",
+        "port": "",
+        "user": "",
+        "password": "",
+        "db_name": "",
+        "schema": ""
+    }
+}

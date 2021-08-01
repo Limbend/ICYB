@@ -2,13 +2,22 @@ import pandas as pd
 import numpy as np
 from dateutil.relativedelta import relativedelta
 
-def fill_balance(start, costs):
+def get_balance_past(start, costs):
     data = costs.shift(1).fillna(0).loc
     
     b = start
     result = []
     for i in costs.index:
         b -= data[i]
+        result.append(b)
+        
+    return result
+
+def get_balance_future(start, costs):    
+    b = start
+    result = []
+    for i in costs.index:
+        b += costs[i]
         result.append(b)
         
     return result
@@ -35,7 +44,7 @@ def get_markers_regular(data, event):
         return np.full(len(data), False)
     
         
-    raise Exception(f'There is no /"{event["search_f"]}/" search function')
+    raise Exception(f'The search function /"{event["search_f"]}/" does not exist')
 
 def get_updated_regular(data, regular_events, window_price=3, uniform_distribution=False):
     new_regular_events = regular_events.copy()
@@ -101,12 +110,3 @@ def get_regular_events(regular_events, g_start_date, g_end_date):
             raise Exception(f'The maximum number of iterations has been exceeded\n{regular_events.loc[i]}')
             
     return pd.DataFrame(result, columns = ['date', 'amount', 'category', 'description', 'balance']).sort_values('date').reset_index(drop=True)
-
-def fill_balance_future(start, costs):    
-    b = start
-    result = []
-    for i in costs.index:
-        b += costs[i]
-        result.append(b)
-        
-    return result
