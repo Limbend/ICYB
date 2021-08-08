@@ -156,7 +156,7 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
         
         ml.sbs_predict(
             model,
-            clear_costs,# old_costs.set_index('date')[['amount']].resample('1D').sum(),
+            clear_costs,
             end_date,
             'amount'
 

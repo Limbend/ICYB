@@ -22,17 +22,6 @@ class User:
         return self.costs
 
     def predict_regular(self, db_engine, end_date):
-        # balance = self.costs['balance'].iloc[-1]
-
-        # self.regular_events = ee.get_regular_events(
-        #     ee.get_updated_regular(
-        #         self.costs,
-        #         db_engine.download_regular(self.id)
-        #     ), date.today(), end_date)
-
-        # self.regular_events['balance'] = ee.get_balance_future(balance, self.regular_events['amount'])
-        # return self.regular_events
-
         self.regular_list = ee.get_updated_regular(
             self.costs,
             db_engine.download_regular(self.id)
