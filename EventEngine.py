@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
+from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
+import ML as ml
+
 
 def get_balance_past(start, costs):
     result = costs.cumsum()
@@ -99,7 +102,7 @@ def get_regular_events(regular_events, g_start_date, g_end_date):
             
     return pd.DataFrame(result, columns = ['date', 'amount', 'category', 'description', 'balance']).sort_values('date').reset_index(drop=True)
 
-def get_full_costs_list(new_costs, db_engine, user_id):
+def get_all_costs(new_costs, db_engine, user_id):
     old_costs = db_engine.download_costs(user_id)
     old_costs['is_new'] = False
     new_costs = new_costs.copy()
@@ -118,3 +121,48 @@ def save_new_costs(full_costs, db_engine, user_id):
     db_engine.add_costs(full_costs[full_costs['is_new']], user_id=user_id)
     return (full_costs['is_new'].sum(), 0)
 
+def preprocessing_for_ml(data, regular_events, start_date, q=0.16):
+    cleared_df = data.copy()
+    cleared_df = cleared_df[cleared_df['date'] > start_date]
+    
+    # Выделяет только расходы
+    markers = cleared_df['amount'] < 0
+    for i in regular_events.index:
+        markers = markers & ~get_markers_regular(cleared_df, regular_events.loc[i])
+    cleared_df = cleared_df[markers]
+    
+    
+    cleared_df = cleared_df[cleared_df['amount'] > cleared_df['amount'].quantile(q)]
+    cleared_df = cleared_df.set_index('date')[['amount']].resample('1D').sum()
+    
+    
+    return cleared_df
+
+def predict_regular_events(regular_list, costs, end_date):
+    balance = costs['balance'].iloc[-1]
+
+    predicted_regular = get_regular_events(
+        get_updated_regular(
+            costs,
+            regular_list
+        ), date.today(), end_date)
+
+    predicted_regular['balance'] = get_balance_future(balance, predicted_regular['amount'])
+    return predicted_regular.set_index('date')
+
+def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
+    full_costs = pd.concat([       
+        predicted_regular[['amount']],
+        
+        ml.sbs_predict(
+            model,
+            clear_costs,# old_costs.set_index('date')[['amount']].resample('1D').sum(),
+            end_date,
+            'amount'
+
+        ).to_frame()
+    ]).resample('1D').sum()
+
+    full_costs['balance'] = get_balance_future(balance, full_costs['amount'])
+
+    return full_costs

@@ -11,7 +11,7 @@ class User:
     def load_from_file(self, db_engine, file_full_name, new_balance):
         self.costs = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
         self.costs['balance'] = ee.get_balance_past(new_balance, self.costs['amount'])
-        self.costs = ee.get_full_costs_list(self.costs, db_engine, self.id)
+        self.costs = ee.get_all_costs(self.costs, db_engine, self.id)
         self.loaded = True
         ee.save_new_costs(self.costs, db_engine, self.id)
         return self.costs
@@ -22,18 +22,37 @@ class User:
         return self.costs
 
     def predict_regular(self, db_engine, end_date):
-        balance = self.costs['balance'].iloc[-1]
+        # balance = self.costs['balance'].iloc[-1]
 
-        self.regular_events = ee.get_regular_events(
-            ee.get_updated_regular(
-                self.costs,
-                db_engine.download_regular(self.id)
-            ), date.today(), end_date)
+        # self.regular_events = ee.get_regular_events(
+        #     ee.get_updated_regular(
+        #         self.costs,
+        #         db_engine.download_regular(self.id)
+        #     ), date.today(), end_date)
 
-        self.regular_events['balance'] = ee.get_balance_future(balance, self.regular_events['amount'])
-        return self.regular_events
+        # self.regular_events['balance'] = ee.get_balance_future(balance, self.regular_events['amount'])
+        # return self.regular_events
 
-class Users:
+        self.regular_list = ee.get_updated_regular(
+            self.costs,
+            db_engine.download_regular(self.id)
+        )
+
+        self.predicted_regular = ee.predict_regular_events(self.regular_list, self.costs, end_date)
+        return self.predicted_regular
+
+    def predict_full(self, db_engine, end_date, start_date=datetime(2020,11,21)):
+        return ee.get_full_costs(
+            self.predicted_regular,
+            ee.preprocessing_for_ml(self.costs, self.regular_list, start_date),
+            self.costs['balance'].iloc[-1],
+            db_engine.download_last_model(self.id),
+            end_date
+        )
+        
+
+
+class User_manager:
     def __init__(self, db_settings):
         self.db_engine = dl.DB_Engine(**db_settings)
         self.user_list = []
@@ -57,4 +76,12 @@ class Users:
         user = self.get_user(user_id)
         if user.loaded == False:
             user.load_from_bd(self.db_engine)
+
         return user.predict_regular(self.db_engine, end_date)
+
+    def predict_full(self, user_id, end_date):
+        user = self.get_user(user_id)
+        if user.loaded == False:
+            user.load_from_bd(self.db_engine)
+
+        return user.predict_full(self.db_engine, end_date)

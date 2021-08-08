@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 #import DataLoader as dl
 #import EventEngine as ee
-from Users import Users #!!!
+from Users import User_manager
 import Visual
 
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 with open('./public/settings.np.json') as f:
     settings = json.load(f)
 
-users = Users(settings['db_connector'])
+manager = User_manager(settings['db_connector'])
 
 
 
@@ -40,22 +40,39 @@ def download_file(update: Update, context: CallbackContext) -> None:
 
     file_received = update.message.reply_to_message.document
     file_received.get_file().download(custom_path = './public/temp/' + file_received.file_name)
-    users.load_from_file(user_id, './public/temp/' + file_received.file_name, balance)
+    manager.load_from_file(user_id, './public/temp/' + file_received.file_name, balance)
 
 
 def reply_costs(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    regular_events = users.predict_regular(user_id, date(2021, 9, 1))
+    regular_events = manager.predict_regular(user_id, date(2021, 9, 1))
 
     Visual.regular_events_plot(regular_events, "./public/temp/output.np.png")
     update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
 
-    Visual.df_to_image(regular_events[['date','amount','description','balance']], "./public/temp/output.np.png")
+    Visual.df_to_image(regular_events[['amount','description','balance']], "./public/temp/output.np.png")
+    update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
+
+def reply_costs(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    regular_events = manager.predict_regular(user_id, date(2021, 9, 1))
+    full_costs = manager.predict_full(user_id, date(2021, 9, 1))
+
+    Visual.regular_events_plot(regular_events, "./public/temp/output.np.png")
+    update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
+
+    Visual.df_to_image(regular_events[['amount','description','balance']], "./public/temp/output.np.png")
+    update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
+
+    Visual.full_events_plot(full_costs, "./public/temp/output.np.png")
+    update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
+    Visual.df_to_image(full_costs, "./public/temp/output.np.png")
     update.message.reply_photo(photo=open('./public/temp/output.np.png', 'rb'), quote=True)
 
 updater = Updater(settings['bot_token'])
 
 updater.dispatcher.add_handler(CommandHandler('costs', reply_costs))
+updater.dispatcher.add_handler(CommandHandler('full', reply_costs))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('file', download_file))
 
