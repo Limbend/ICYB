@@ -3,9 +3,11 @@ import pandas as pd
 from sqlalchemy import create_engine
 import pickle
 
+
 def tinkoff_file_parse(path, db_engine, user_id):
-    df = pd.read_csv(path, sep=';', parse_dates=[0,1], dayfirst=True, decimal=",", encoding='cp1251')
-    df = df[df['Статус']=='OK'][[
+    df = pd.read_csv(path, sep=';', parse_dates=[
+                     0, 1], dayfirst=True, decimal=",", encoding='cp1251')
+    df = df[df['Статус'] == 'OK'][[
         'Дата операции',
         'Сумма платежа',
         'Категория',
@@ -13,17 +15,19 @@ def tinkoff_file_parse(path, db_engine, user_id):
     ]]
 
     df_for_sql = df.reindex(index=df.index[::-1]).reset_index(drop=True)
-    df_for_sql.columns = ['date', 'amount', 'category', 'description']#, 'balance']
-    
+    df_for_sql.columns = ['date', 'amount',
+                          'category', 'description']  # , 'balance']
 
-    for k,v in db_engine.download_c_rules(user_id=user_id):
-        df_for_sql.loc[df_for_sql['description'] == k,'category']=v
-        
+    for k, v in db_engine.download_c_rules(user_id=user_id):
+        df_for_sql.loc[df_for_sql['description'] == k, 'category'] = v
+
     return df_for_sql
+
 
 class DB_Engine:
     def __init__(self, ip, port, user, password, db_name, schema):
-        self.connector = create_engine(f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
+        self.connector = create_engine(
+            f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
         self.schema = schema
 
     def download_c_rules(self, user_id, table='dictionary_categories'):
@@ -34,18 +38,20 @@ class DB_Engine:
 
     def download_costs(self, user_id, table='costs'):
         return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY date', self.connector)
-    
+
     def add_costs(self, data, user_id, table='costs'):
-        data = data[['date', 'amount', 'category', 'description', 'balance']].copy().sort_values('date')
+        data = data[['date', 'amount', 'category',
+                     'description', 'balance']].copy().sort_values('date')
         data['user_id'] = [user_id]*len(data)
-        data.to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
+        data.to_sql(table, self.connector, schema=self.schema,
+                    if_exists='append', index=False)
 
     def download_last_model(self, user_id, table='models'):
         return pickle.loads(
-                pd.read_sql(
-                    f'SELECT dump FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY id DESC LIMIT 1', self.connector
-                    ).loc[0, 'dump']
-                )
+            pd.read_sql(
+                f'SELECT dump FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY id DESC LIMIT 1', self.connector
+            ).loc[0, 'dump']
+        )
 
     def upload_model(self, user_id, model, table='models'):
         pd.DataFrame([[
@@ -55,4 +61,3 @@ class DB_Engine:
             'user_id',
             'dump'
         ]).to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
-            
