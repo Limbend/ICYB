@@ -61,8 +61,8 @@ def reply_costs(update: Update, context: CallbackContext) -> None:
 
 def reply_costs(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    regular_events = manager.predict_regular(user_id, date(2021, 9, 1))
-    full_costs = manager.predict_full(user_id, date(2021, 9, 1))
+    regular_events = manager.predict_regular(user_id, date(2021, 11, 1))
+    full_costs = manager.predict_full(user_id, date(2021, 11, 1))
 
     Visual.regular_events_plot(regular_events, "./public/temp/output.np.png")
     update.message.reply_photo(photo=open(

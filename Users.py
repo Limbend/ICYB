@@ -8,9 +8,7 @@ import time
 class User:
     def __init__(self, id, db_engine):
         self.id = id
-        # self.loaded = False
-        # self.model = None
-        # download_full_info(db_engine)
+        self.download_full_info(db_engine)
 
     def download_full_info(self, db_engine):
         self.costs = db_engine.download_costs(self.id)
@@ -31,26 +29,12 @@ class User:
         ee.save_new_costs(self.costs, db_engine, self.id)
         return self.costs
 
-    # def load_from_bd(self, db_engine):
-    #     self.costs = db_engine.download_costs(self.id)
-    #     self.loaded = True
-    #     return self.costs
-
-    def predict_regular(self, db_engine, end_date):
-        # self.regular_list = ee.get_updated_regular(
-        #     self.costs,
-        #     db_engine.download_regular(self.id)
-        # )
-
+    def predict_regular(self, end_date):
         self.predicted_regular = ee.predict_regular_events(
             self.regular_list, self.costs, end_date)
         return self.predicted_regular
 
     def predict_full(self, end_date, start_date=datetime(2020, 11, 21)):
-        # def predict_full(self, db_engine, end_date, start_date=datetime(2020, 11, 21)):
-        # if self.model is None:
-        #     self.model = db_engine.download_last_model(self.id)
-
         return ee.get_full_costs(
             self.predicted_regular,
             ee.preprocessing_for_ml(self.costs, self.regular_list, start_date),
@@ -90,26 +74,16 @@ class UserManager:
     def load_from_file(self, user_id, file_full_name, new_balance):
         return self.get_user(user_id).load_from_file(self.db_engine, file_full_name, new_balance)
 
-    def load_from_db(self, user_id):
-        return self.get_user(user_id).load_from_bd(self.db_engine)
-
     def predict_regular(self, user_id, end_date):
         user = self.get_user(user_id)
-        # if user.loaded == False:
-        #     user.load_from_bd(self.db_engine)
-
-        return user.predict_regular(self.db_engine, end_date)
+        return user.predict_regular(end_date)
 
     def predict_full(self, user_id, end_date):
         user = self.get_user(user_id)
-        # if user.loaded == False:
-        #     user.load_from_bd(self.db_engine)
 
         return user.predict_full(end_date)
 
     def fit_new_model(self, user_id):
         user = self.get_user(user_id)
-        # if user.loaded == False:
-        #     user.load_from_bd(self.db_engine)
 
         return user.fit_new_model(self.db_engine)
