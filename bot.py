@@ -6,9 +6,6 @@ import logging
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
-#import DataLoader as dl
-
-#import EventEngine as ee
 from Users import UserManager
 import Visual
 
@@ -59,7 +56,7 @@ def reply_costs(update: Update, context: CallbackContext) -> None:
         './public/temp/output.np.png', 'rb'), quote=True)
 
 
-def reply_costs(update: Update, context: CallbackContext) -> None:
+def reply_full(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     regular_events = manager.predict_regular(user_id, date(2021, 11, 1))
     full_costs = manager.predict_full(user_id, date(2021, 11, 1))
@@ -91,7 +88,7 @@ def refit(update: Update, context: CallbackContext) -> None:
 updater = Updater(settings['bot_token'])
 
 updater.dispatcher.add_handler(CommandHandler('costs', reply_costs))
-updater.dispatcher.add_handler(CommandHandler('full', reply_costs))
+updater.dispatcher.add_handler(CommandHandler('full', reply_full))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))

@@ -6,7 +6,7 @@ Lag = list(range(1, 13))+list(range(14, 7*12+1, 7))
 Rolling_mean_size = list(range(1, 11))+list(range(14, 7*12+1, 7))
 
 
-def sbs_predict(model, old_data, end_date, target_column, no_positiv=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
+def sbs_predict(model, old_data, end_date, target_column, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
     data = old_data[[target_column]].copy()
     day_index = pd.date_range(data.index[-1], end_date)[1:]
     data = old_data.append(pd.DataFrame(
@@ -21,7 +21,7 @@ def sbs_predict(model, old_data, end_date, target_column, no_positiv=True, lag=L
         data.loc[day, target_column] = model.predict(row)[0]
 
     result = data.loc[day_index, target_column]
-    if no_positiv:
+    if only_negative:
         result[result > 0] = 0
     return result
 
