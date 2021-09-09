@@ -36,10 +36,10 @@ def make_features(data, target, lag, rolling_mean_size):
 
     if type(lag) is list:
         for l in lag:
-            data['lag_{}'.format(l)] = data[target].shift(l)
+            data[f'lag_{l}'] = data[target].shift(l)
     else:
         for l in range(1, lag + 1):
-            data['lag_{}'.format(l)] = data[target].shift(l)
+            data[f'lag_{l}'] = data[target].shift(l)
 
     if type(rolling_mean_size) is list:
         for r in rolling_mean_size:
