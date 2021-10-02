@@ -16,6 +16,7 @@ class User:
         regular_list: список регулярных расходов.
         predicted_regular: рассчитанные регулярные расходы до указанной даты.
     '''
+
     def __init__(self, id, db_engine):
         self.id = id
         self.download_full_info(db_engine)
@@ -28,10 +29,7 @@ class User:
         '''
         self.costs = db_engine.download_costs(self.id)
 
-        self.regular_list = ee.get_updated_regular(
-            self.costs,
-            db_engine.download_regular(self.id)
-        )
+        self.regular_list = db_engine.download_regular(self.id)
 
         self.model = db_engine.download_last_model(self.id)
 
@@ -42,7 +40,7 @@ class User:
             db_engine: объект для работы с базой данных.
             file_full_name: полное имя файла.
             new_balance: текущий баланс пользователя, после последней операции в файле.
-        
+
         Returns:
             Датафрейм всех расходов с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
@@ -60,7 +58,7 @@ class User:
 
         Args:
             end_date: дата до которой строить прогноз.
-        
+
         Returns:
             Датафрейм регулярных расходов с колонками ['amount', 'category', 'description', 'balance']
         '''
@@ -148,13 +146,11 @@ class UserManager:
             user_id: id пользователя.
             file_full_name: полное имя файла.
             new_balance: текущий баланс пользователя, после последней операции в файле.
-        
+
         Returns:
             Датафрейм всех расходов с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-
-        self.get_user()
         return self.get_user(user_id).load_from_file(self.db_engine, file_full_name, new_balance)
 
     def predict_regular(self, user_id, end_date):
@@ -163,7 +159,7 @@ class UserManager:
         Args:
             user_id: id пользователя.
             end_date: дата до которой строить прогноз.
-        
+
         Returns:
             Датафрейм регулярных расходов с колонками ['amount', 'category', 'description', 'balance']
         '''
@@ -176,7 +172,7 @@ class UserManager:
         Args:
             user_id: id пользователя.
             end_date: дата до которой строить прогноз.
-        
+
         Returns:
             Датафрейм расходов с колонками ['amount', 'balance']
         '''
@@ -189,12 +185,12 @@ class UserManager:
 
         Args:
             user_id: id пользователя.
-        
+
         Returns:
             Отчет о обучении модели. Словарь формата {'time', 'event_count', 'ml_event_count'}
-            time: время в секундах, потребовавшеся для обучения модели.
+            time: потраченное время в секундах, на обучение модели.
             event_count: всего событий в базе.
-            ml_event_count: события учавствувщие в обучении модели.
+            ml_event_count: события участвующие в обучении модели.
         '''
         user = self.get_user(user_id)
 
@@ -206,7 +202,7 @@ class UserManager:
         Args:
             user_id: id пользователя.
             end_date: дата до которой строить прогноз.
-        
+
         Returns:
             Словарь с изображениями в двоичном формате.
         '''

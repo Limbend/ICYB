@@ -34,7 +34,7 @@ class DB_Engine:
         return pd.read_sql(f'SELECT key, value FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector).values.tolist()
 
     def download_regular(self, user_id, table='regular'):
-        return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
+        return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
 
     def download_costs(self, user_id, table='costs'):
         return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY date', self.connector)

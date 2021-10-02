@@ -39,75 +39,109 @@ def get_markers_regular(data, event):
         f'The search function /"{event["search_f"]}/" does not exist')
 
 
-def get_updated_regular(data, regular_events, window_price=3, uniform_distribution=False):
+def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
     new_regular_events = regular_events.copy()
-
-    for i in regular_events[regular_events['adjust_price']].index:
-        amounts = data[get_markers_regular(data, regular_events.loc[i])].tail(
-            window_price)['amount']
-        if uniform_distribution:
-            new_regular_events.loc[i, 'amount'] = amounts.mean()
-        else:
-            new_regular_events.loc[i, 'amount'] = (
-                amounts * [2 / (window_price + window_price**2) * (x + 1) for x in range(window_price)]).sum()
-
-    for i in regular_events[regular_events['adjust_date']].index:
-        events = data[get_markers_regular(data, regular_events.loc[i])]
-
-        if len(events) > 0:
-            new_regular_events.loc[i, 'start_date'] = events.iloc[-1]['date']
-
-    return new_regular_events
-
-
-def get_regular_events(regular_events, g_start_date, g_end_date):
-
     result = []
     j_limit = 1000
-    regular_events = regular_events.copy()
 
-    for i in regular_events.index:
-        r_event = regular_events.loc[i]
-        j = 0
-        if r_event['end_date'] is None:
-            end_date = g_end_date
-        else:
-            end_date = min(r_event['end_date'], g_end_date)
-
+    for i, r_event in new_regular_events.iterrows():
         d_date = relativedelta(
             years=int(r_event['d_years']),
             months=int(r_event['d_months']),
             days=int(r_event['d_days'])
         )
 
-        date = r_event['start_date']
+        if r_event['end_date'] is None:
+            r_event['end_date'] = g_end_date
+        else:
+            r_event['end_date'] = min(r_event['end_date'], g_end_date)
 
-        # Поиск начальной даты
-        while(date < g_start_date and date < end_date and j < j_limit):
-            date += d_date
-            j += 1
+        # Обновление цены
+        if(r_event['adjust_price']):
+            amounts = costs[get_markers_regular(costs, r_event)].tail(window_price)[
+                'amount']
+            if(len(amounts) > 0):
+                if uniform_distribution:
+                    r_event['amount'] = amounts.mean()
+                else:
+                    window_price = min(window_price, len(amounts))
+                    r_event['amount'] = (
+                        amounts * [2 / (window_price + window_price**2) * (x + 1) for x in range(window_price)]).sum()
 
-        if j == j_limit:
-            raise Exception(
-                f'When searching for the start date, the maximum number of iterations was exceeded\n{regular_events.loc[i]}')
+        # Обновление начальной даты
+        if(r_event['adjust_date']):
+            events = costs[get_markers_regular(costs, regular_events.loc[i])]
+            if len(events) > 0:
+                r_event['start_date'] = events.iloc[-1]['date']
 
         j = 0
-        while(date < end_date and j < j_limit):
+        new_start = r_event['start_date']  # + d_date * j
+        while(new_start < g_start_date and new_start < r_event['end_date']):
+            j += 1
+            if j == j_limit:
+                raise Exception(
+                    f'When searching for the start date, the maximum number of iterations was exceeded\n{r_event}')
+
+            new_start = r_event['start_date'] + d_date * j
+
+        # Проверка на просрочку
+        j -= 1
+        if(r_event['follow_overdue'] and j > 0):
+            pay_date_overdue = g_start_date + relativedelta(days=1)
+
+            if(r_event['adjust_date']):
+                # Если между стартовой датой для регулярки r_event['start_date'] и стартовой датой для начала поиска g_start_date есть помешаются регулярки - они являются просрочкой. Количество поместившихся будет в j.
+                for i_overdue in range(j):
+                    result.append((
+                        pay_date_overdue,
+                        r_event['amount'],
+                        f'overdue[{i}-{i_overdue}]',
+                        r_event['description'],
+                        np.nan,
+                        True
+                    ))
+            else:
+                # Посчитать сколько должно быть регулярок между стартовой датой r_event['start_date'] и начальной датой поиска g_start_date.
+                # Вычесть из них сколько по факту было.
+
+                count_overdue = j - sum(get_markers_regular(
+                    costs[costs['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1
+                # Если число положительное, то есть просрочки.
+                if(count_overdue > 0):
+                    for i_overdue in range(count_overdue):
+                        result.append((
+                            pay_date_overdue,
+                            r_event['amount'],
+                            f'overdue[{i}-{i_overdue}]',
+                            r_event['description'],
+                            np.nan,
+                            True
+                        ))
+
+                # Если отрицательное, то есть оплата зарание. Нужно обновить стартовую дату.
+                elif(count_overdue < 0):
+                    new_start = r_event['start_date'] + \
+                        d_date * (j - count_overdue)
+
+        j = 0
+        date = new_start  # + d_date * j
+        while(date < r_event['end_date']):
+            date = new_start + d_date * j
             result.append((
                 date,
                 r_event['amount'],
                 f'regular[{i}]',
                 r_event['description'],
-                np.nan
+                np.nan,
+                False
             ))
-            date += d_date
+
             j += 1
+            if j == j_limit:
+                raise Exception(
+                    f'The maximum number of iterations has been exceeded\n{r_event}')
 
-        if j == j_limit:
-            raise Exception(
-                f'The maximum number of iterations has been exceeded\n{regular_events.loc[i]}')
-
-    return pd.DataFrame(result, columns=['date', 'amount', 'category', 'description', 'balance']).sort_values('date').reset_index(drop=True)
+    return pd.DataFrame(result, columns=['date', 'amount', 'category', 'description', 'balance', 'is_overdue']).sort_values('date').reset_index(drop=True)
 
 
 def get_all_costs(new_costs, db_engine, user_id):
@@ -152,12 +186,8 @@ def preprocessing_for_ml(data, regular_events, start_date, q=0.16):
 
 def predict_regular_events(regular_list, costs, end_date):
     balance = costs['balance'].iloc[-1]
-
     predicted_regular = get_regular_events(
-        get_updated_regular(
-            costs,
-            regular_list
-        ), date.today(), end_date)
+        regular_list, costs, date.today(), end_date)
 
     predicted_regular['balance'] = get_balance_future(
         balance, predicted_regular['amount'])
@@ -180,6 +210,7 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
     full_costs['balance'] = get_balance_future(balance, full_costs['amount'])
 
     return full_costs
+
 
 def fit_new_model(data):
     return ml.create_model(data, 'amount')
