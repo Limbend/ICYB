@@ -11,7 +11,7 @@ def get_balance_past(start, costs):
 
 
 def get_balance_future(start, costs):
-    return costs.cumsum()+start
+    return costs.cumsum() + start
 
 
 def get_markers_regular(data, event):
@@ -166,9 +166,19 @@ def save_new_costs(full_costs, db_engine, user_id):
     return (full_costs['is_new'].sum(), 0)
 
 
+def drop_paired(data: pd.DataFrame, by: str):
+    sort_values = data[by].sort_values()
+    abs_values = sort_values.abs()
+    c1 = sort_values.groupby(abs_values).transform(pd.Series.cumsum) > 0
+    c2 = sort_values[::-1].groupby(abs_values).transform(pd.Series.cumsum) < 0
+
+    return data[c1 | c2]
+
+
 def preprocessing_for_ml(data, regular_events, start_date, q=0.16):
     cleared_df = data.copy()
     cleared_df = cleared_df[cleared_df['date'] > start_date]
+    cleared_df = drop_paired(cleared_df, 'amount')
 
     # Выделяет только расходы
     markers = cleared_df['amount'] < 0
@@ -180,7 +190,6 @@ def preprocessing_for_ml(data, regular_events, start_date, q=0.16):
     cleared_df = cleared_df[cleared_df['amount']
                             > cleared_df['amount'].quantile(q)]
     cleared_df = cleared_df.set_index('date')[['amount']].resample('1D').sum()
-
     return cleared_df
 
 
