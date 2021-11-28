@@ -126,7 +126,6 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
         j = 0
         date = new_start  # + d_date * j
         while(date < r_event['end_date']):
-            date = new_start + d_date * j
             result.append((
                 date,
                 r_event['amount'],
@@ -140,8 +139,12 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
             if j == j_limit:
                 raise Exception(
                     f'The maximum number of iterations has been exceeded\n{r_event}')
+            date = new_start + d_date * j
 
-    return pd.DataFrame(result, columns=['date', 'amount', 'category', 'description', 'balance', 'is_overdue']).sort_values('date').reset_index(drop=True)
+    df_events = pd.DataFrame(result, columns=[
+                             'date', 'amount', 'category', 'description', 'balance', 'is_overdue']).sort_values('date').reset_index(drop=True)
+    df_events['date'] = pd.to_datetime(df_events['date'])
+    return df_events
 
 
 def get_all_costs(new_costs, db_engine, user_id):
@@ -175,21 +178,27 @@ def drop_paired(data: pd.DataFrame, by: str):
     return data[c1 | c2]
 
 
-def preprocessing_for_ml(data, regular_events, start_date, q=0.16):
+def drop_outliers(data, q=0.16):
+    data = data[data['amount'] > data['amount'].quantile(q)]
+    return data
+
+
+def preprocessing_for_ml(data, regular_list, start_date, q=0.16):
     cleared_df = data.copy()
     cleared_df = cleared_df[cleared_df['date'] > start_date]
     cleared_df = drop_paired(cleared_df, 'amount')
 
     # Выделяет только расходы
     markers = cleared_df['amount'] < 0
-    for i in regular_events.index:
+    for i in regular_list.index:
         markers = markers & ~get_markers_regular(
-            cleared_df, regular_events.loc[i])
+            cleared_df, regular_list.loc[i])
     cleared_df = cleared_df[markers]
 
-    cleared_df = cleared_df[cleared_df['amount']
-                            > cleared_df['amount'].quantile(q)]
+    cleared_df = drop_outliers(cleared_df, q)
+
     cleared_df = cleared_df.set_index('date')[['amount']].resample('1D').sum()
+
     return cleared_df
 
 

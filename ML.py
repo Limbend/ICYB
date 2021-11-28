@@ -2,8 +2,8 @@ from numpy import result_type
 from sklearn.linear_model import LinearRegression
 import pandas as pd
 
-Lag = list(range(1, 13))+list(range(14, 7*12+1, 7))
-Rolling_mean_size = list(range(1, 11))+list(range(14, 7*12+1, 7))
+Lag = list(range(1, 13)) + list(range(14, 7 * 12 + 1, 7))
+Rolling_mean_size = list(range(1, 11)) + list(range(14, 7 * 12 + 1, 7))
 
 
 def sbs_predict(model, old_data, end_date, target_column, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
@@ -95,4 +95,4 @@ def create_model(data, target, lag=Lag, rolling_mean_size=Rolling_mean_size):
                           rolling_mean_size
                           ).dropna()
 
-    return LinearRegression(n_jobs=7).fit(train.drop(target, axis=1), train[target])
+    return LinearRegression(n_jobs=2).fit(train.drop(target, axis=1), train[target])

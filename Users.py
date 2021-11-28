@@ -211,5 +211,6 @@ class UserManager:
 
         return {
             'costs': Visual.costs_plot(full_costs),
-            'regular': Visual.df_to_image(regular_events[['amount', 'description']], './public/temp/output.np.png')
+            'regular': Visual.df_to_text(regular_events[['amount', 'description']])
+            # 'regular': Visual.df_to_image(regular_events[['amount', 'description']], './temp/output.np.png')
         }
