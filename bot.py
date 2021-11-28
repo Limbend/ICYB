@@ -10,7 +10,7 @@ from Users import UserManager
 
 
 logging.basicConfig(format='%(asctime)-12s - %(name)-12s - %(levelname)-8s - %(message)s',
-                    level=logging.INFO, filename='log.np.txt')
+                    level=logging.INFO, filename='.np.log')
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
@@ -20,7 +20,7 @@ logging.getLogger('').addHandler(console)
 logger = logging.getLogger(__name__)
 
 
-with open('./public/settings.np.json') as f:
+with open('./settings.np.json') as f:
     settings = json.load(f)
 
 manager = UserManager(settings['db_connector'])
@@ -36,8 +36,8 @@ def download_file(update: Update, context: CallbackContext) -> None:
 
     file_received = update.message.reply_to_message.document
     file_received.get_file().download(
-        custom_path='./public/temp/' + file_received.file_name)
-    manager.load_from_file(user_id, './public/temp/' +
+        custom_path='./temp/' + file_received.file_name)
+    manager.load_from_file(user_id, './temp/' +
                            file_received.file_name, balance)
 
 
@@ -46,7 +46,8 @@ def monthly_forecast(update: Update, context: CallbackContext) -> None:
     report_obj = manager.get_report_obj(
         user_id, date.today() + relativedelta(months=1))
     update.message.reply_photo(photo=report_obj['costs'], quote=True)
-    update.message.reply_photo(photo=report_obj['regular'], quote=False)
+    # update.message.reply_photo(photo=report_obj['regular'], quote=False)
+    update.message.reply_text(text=report_obj['regular'], quote=False)
 
 
 def refit(update: Update, context: CallbackContext) -> None:

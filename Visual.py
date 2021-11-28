@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 import seaborn as sns
-import dataframe_image as dfi
+# import dataframe_image as dfi # dataframe-image==0.1.1
 import io
 
 
@@ -33,6 +33,19 @@ def costs_plot(costs):
     return plot_b
 
 
-def df_to_image(dataframe, image_full_name):
-    dfi.export(dataframe, image_full_name)
-    return open(image_full_name, 'rb')
+# def df_to_image(dataframe, image_full_name):
+#     # dfi.export(dataframe, image_full_name, table_conversion='matplotlib') # не красивый вид, но не требует хром
+#     dfi.export(dataframe, image_full_name)
+#     return open(image_full_name, 'rb')
+
+def df_to_text(dataframe):
+    result = dataframe.copy()
+    result.index = result.index.strftime('%d.%m.%Y')
+
+    result = result.to_string(formatters={
+        # 'date': '{:%d.%m.%Y}'.format,
+        'amount': "{:.2f}".format,
+        # 'balance': "{:.2f}".format,
+    })
+
+    return 'Регулярки\n        ' + result
