@@ -12,6 +12,7 @@ Thumbs.db
 
 # VS Code
 .vscode/
+.vs/
 
 # Jupyter notebook
 **/.ipynb_checkpoints/
