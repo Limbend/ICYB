@@ -6,7 +6,7 @@ Lag = list(range(1, 13)) + list(range(14, 7 * 12 + 1, 7))
 Rolling_mean_size = list(range(1, 11)) + list(range(14, 7 * 12 + 1, 7))
 
 
-def sbs_predict(model, old_data, end_date, target_column, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
+def sbs_predict(model, old_data, end_date, target_column, working_columns, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
     '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
 
     Args:
@@ -14,6 +14,7 @@ def sbs_predict(model, old_data, end_date, target_column, only_negative=True, la
         old_data: уже известные данные за прошлый период.
         end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
         target_column: имя колонки целевого признака.
+        working_columns: имена колонок которые использовать для генерации фичей.
         only_negative: итоговый прогноз будет обнуляться, если модель выдаст значения больше нуля.
         lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
         rolling_mean_size: список размеров для создания признаков скользящего среднего
@@ -22,13 +23,13 @@ def sbs_predict(model, old_data, end_date, target_column, only_negative=True, la
         Спрогнозированные значения.
     '''
 
-    data = old_data[[target_column]].copy()
+    data = old_data[[working_columns]].copy()
     day_index = pd.date_range(data.index[-1], end_date)[1:]
     data = old_data.append(pd.DataFrame(
-        [], columns=[target_column], index=day_index))
+        [], columns=[working_columns], index=day_index))
 
     for day in day_index:
-        row = make_features(data.loc[:day], target_column,
+        row = make_features(data.loc[:day], working_columns,
                             lag,
                             rolling_mean_size
                             ).loc[[day]].drop(target_column, axis=1)
@@ -41,12 +42,12 @@ def sbs_predict(model, old_data, end_date, target_column, only_negative=True, la
     return result
 
 
-def make_features(data, target, lag, rolling_mean_size):
+def make_features(data, columns, lag, rolling_mean_size):
     '''Рассчитывает дополнительные признаки для временного ряда. 
 
     Args:
         data: исходный временной ряд.
-        target: имя колонки целевого признака.
+        column: имя колонки целевого признака.
         lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
         rolling_mean_size: список размеров для создания признаков скользящего среднего
 
@@ -61,36 +62,38 @@ def make_features(data, target, lag, rolling_mean_size):
     data['day'] = index.day
     data['dayofweek'] = index.dayofweek
 
-    if type(lag) is list:
-        for l in lag:
-            data[f'lag_{l}'] = data[target].shift(l)
-    else:
-        for l in range(1, lag + 1):
-            data[f'lag_{l}'] = data[target].shift(l)
+    for column in columns:
+        if type(lag) is list:
+            for l in lag:
+                data[f'{column}_lag_{l}'] = data[column].shift(l)
+        else:
+            for l in range(1, lag + 1):
+                data[f'{column}_lag_{l}'] = data[column].shift(l)
 
-    if type(rolling_mean_size) is list:
-        for r in rolling_mean_size:
-            data[f'rolling_mean_{r}'] = data[target].shift().rolling(r).mean()
-    else:
-        data[f'rolling_mean_{rolling_mean_size}'] = data[target].shift().rolling(
-            rolling_mean_size).mean()
+        if type(rolling_mean_size) is list:
+            for r in rolling_mean_size:
+                data[f'{column}_rm_{r}'] = data[column].shift().rolling(r).mean()
+        else:
+            data[f'{column}_rm_{rolling_mean_size}'] = data[column].shift().rolling(
+                rolling_mean_size).mean()
 
     return data
 
 
-def create_model(data, target, lag=Lag, rolling_mean_size=Rolling_mean_size):
+def create_model(data, target, working_columns, lag=Lag, rolling_mean_size=Rolling_mean_size):
     '''Генерирует признаки, создает и обучает новую модель. 
 
     Args:
         data: датафрейм временного ряда.
         target: имя колонки целевого признака.
+        working_columns: имена колонок которые использовать для генерации фичей.
         lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
         rolling_mean_size: список размеров для создания признаков скользящего среднего
 
     Returns:
         Объект модели.
     '''
-    train = make_features(data, target,
+    train = make_features(data, working_columns,
                           lag,
                           rolling_mean_size
                           ).dropna()
