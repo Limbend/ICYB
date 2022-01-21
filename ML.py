@@ -23,18 +23,18 @@ def sbs_predict(model, old_data, end_date, target_column, working_columns, only_
         Спрогнозированные значения.
     '''
 
-    data = old_data[[working_columns]].copy()
+    data = old_data[working_columns].copy()
     day_index = pd.date_range(data.index[-1], end_date)[1:]
     data = old_data.append(pd.DataFrame(
-        [], columns=[working_columns], index=day_index))
+        [], columns=working_columns, index=day_index))
 
     for day in day_index:
         row = make_features(data.loc[:day], working_columns,
                             lag,
                             rolling_mean_size
-                            ).loc[[day]].drop(target_column, axis=1)
+                            ).loc[[day]].drop(working_columns, axis=1)
 
-        data.loc[day, target_column] = model.predict(row)[0]
+        data.loc[day, working_columns] = model.predict(row)[0]
 
     result = data.loc[day_index, target_column]
     if only_negative:
@@ -63,19 +63,11 @@ def make_features(data, columns, lag, rolling_mean_size):
     data['dayofweek'] = index.dayofweek
 
     for column in columns:
-        if type(lag) is list:
-            for l in lag:
-                data[f'{column}_lag_{l}'] = data[column].shift(l)
-        else:
-            for l in range(1, lag + 1):
-                data[f'{column}_lag_{l}'] = data[column].shift(l)
-
-        if type(rolling_mean_size) is list:
-            for r in rolling_mean_size:
-                data[f'{column}_rm_{r}'] = data[column].shift().rolling(r).mean()
-        else:
-            data[f'{column}_rm_{rolling_mean_size}'] = data[column].shift().rolling(
-                rolling_mean_size).mean()
+        for l in lag:
+            data[f'{column}_lag_{l}'] = data[column].shift(l)
+        
+        for r in rolling_mean_size:
+            data[f'{column}_rm_{r}'] = data[column].shift().rolling(r).mean()
 
     return data
 

@@ -183,7 +183,23 @@ def drop_outliers(data, q=0.16):
     return data
 
 
-def preprocessing_for_ml(data, regular_list, start_date, q=0.16):
+def encoder_in_sum(data, target_column, sum_column, top_size, sort_ascending=True):
+    result = data.groupby(target_column)[sum_column].sum(
+    ).sort_values(ascending=sort_ascending)[:top_size]
+    result = {name: (top_size-i+1)/(top_size+1)
+              for i, name in enumerate(result.index)}
+    return result
+
+
+def encoder_in_count(data, target_column, top_size, sort_ascending=False):
+    result = data.groupby(target_column)[target_column].count(
+    ).sort_values(ascending=sort_ascending)[:top_size]
+    result = {name: (top_size-i+1)/(top_size+1)
+              for i, name in enumerate(result.index)}
+    return result
+
+
+def preprocessing_for_ml(data, regular_list, start_date, q=0.16, add_column=False):
     cleared_df = data.copy()
     cleared_df = cleared_df[cleared_df['date'] > start_date]
     cleared_df = drop_paired(cleared_df, 'amount')
@@ -197,7 +213,31 @@ def preprocessing_for_ml(data, regular_list, start_date, q=0.16):
 
     cleared_df = drop_outliers(cleared_df, q)
 
-    cleared_df = cleared_df.set_index('date')[['amount']].resample('1D').sum()
+    if add_column == 1:
+        cleared_df['category_n'] = cleared_df['category'].map(
+            encoder_in_sum(cleared_df, 'category', 'amount', 20)
+        ).fillna(1./21)
+        cleared_df['description_n'] = cleared_df['description'].map(
+            encoder_in_sum(cleared_df, 'description', 'amount', 20)
+        ).fillna(1./21)
+
+        cleared_df = cleared_df.set_index(
+            'date')[['amount', 'category_n', 'description_n']].resample('1D').sum()
+
+    elif add_column == 2:
+        cleared_df['category_n'] = cleared_df['category'].map(
+            encoder_in_count(cleared_df, 'category', 20)
+        ).fillna(1./21)
+        cleared_df['description_n'] = cleared_df['description'].map(
+            encoder_in_count(cleared_df, 'description', 20)
+        ).fillna(1./21)
+
+        cleared_df = cleared_df.set_index(
+            'date')[['amount', 'category_n', 'description_n']].resample('1D').sum()
+
+    else:
+        cleared_df = cleared_df.set_index(
+            'date')[['amount']].resample('1D').sum()
 
     return cleared_df
 
@@ -220,7 +260,8 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
             model,
             clear_costs,
             end_date,
-            'amount'
+            'amount',
+            ['amount', 'category_n', 'description_n']
 
         ).to_frame()
     ]).resample('1D').sum()
@@ -231,4 +272,4 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
 
 
 def fit_new_model(data):
-    return ml.create_model(data, 'amount')
+    return ml.create_model(data, ['amount', 'amount', 'category_n', 'description_n'])
