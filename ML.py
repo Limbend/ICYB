@@ -6,11 +6,11 @@ Lag = list(range(1, 13)) + list(range(14, 7 * 12 + 1, 7))
 Rolling_mean_size = list(range(1, 11)) + list(range(14, 7 * 12 + 1, 7))
 
 
-def sbs_predict(model, old_data, end_date, target_column, working_columns, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
+def sbs_predict(models, old_data, end_date, target_column, working_columns, mf_rules, only_negative=True):
     '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
 
     Args:
-        model: объект модели.
+        model: объект модели. !!!
         old_data: уже известные данные за прошлый период.
         end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
         target_column: имя колонки целевого признака.
@@ -29,12 +29,11 @@ def sbs_predict(model, old_data, end_date, target_column, working_columns, only_
         [], columns=working_columns, index=day_index))
 
     for day in day_index:
-        row = make_features(data.loc[:day], working_columns,
-                            lag,
-                            rolling_mean_size
+        row = make_features(data.loc[:day], mf_rules
                             ).loc[[day]].drop(working_columns, axis=1)
 
-        data.loc[day, working_columns] = model.predict(row)[0]
+        for column in working_columns:
+            data.loc[day, column] = models[column].predict(row)[0]
 
     result = data.loc[day_index, target_column]
     if only_negative:
@@ -42,7 +41,11 @@ def sbs_predict(model, old_data, end_date, target_column, working_columns, only_
     return result
 
 
-def make_features(data, columns, lag, rolling_mean_size):
+def default_mf_rules(working_columns, lag=Lag, rolling_mean_size=Rolling_mean_size):
+    return [{'column': c, 'lag': lag, 'rolling_mean_size': rolling_mean_size} for c in working_columns]
+
+
+def make_features(data, mf_rules):
     '''Рассчитывает дополнительные признаки для временного ряда. 
 
     Args:
@@ -62,17 +65,18 @@ def make_features(data, columns, lag, rolling_mean_size):
     data['day'] = index.day
     data['dayofweek'] = index.dayofweek
 
-    for column in columns:
-        for l in lag:
-            data[f'{column}_lag_{l}'] = data[column].shift(l)
-        
-        for r in rolling_mean_size:
-            data[f'{column}_rm_{r}'] = data[column].shift().rolling(r).mean()
+    for rule in mf_rules:
+        for l in rule['lag']:
+            data[f'{rule["column"]}:lag:{l}'] = data[rule['column']].shift(l)
+
+        for r in rule['rolling_mean_size']:
+            data[f'{rule["column"]}:rm:{r}'] = data[rule['column']
+                                                    ].shift().rolling(r).mean()
 
     return data
 
 
-def create_model(data, target, working_columns, lag=Lag, rolling_mean_size=Rolling_mean_size):
+def create_models(data, working_columns, mf_rules):
     '''Генерирует признаки, создает и обучает новую модель. 
 
     Args:
@@ -85,9 +89,20 @@ def create_model(data, target, working_columns, lag=Lag, rolling_mean_size=Rolli
     Returns:
         Объект модели.
     '''
-    train = make_features(data, working_columns,
-                          lag,
-                          rolling_mean_size
+    train = make_features(data, mf_rules).dropna()
+
+    models = {}
+    for column in working_columns:
+        models[column] = LinearRegression(
+            n_jobs=-1).fit(train.drop(working_columns, axis=1), train[column])
+    return models
+
+
+def __create_models__(data, models, working_columns):
+    train = make_features(data, working_columns, default_mf_rules(working_columns),
                           ).dropna()
 
-    return LinearRegression(n_jobs=2).fit(train.drop(target, axis=1), train[target])
+    for column in working_columns:
+        models[column] = models[column].fit(
+            train.drop(working_columns, axis=1), train[column])
+    return models
