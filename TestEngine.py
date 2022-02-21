@@ -16,22 +16,29 @@ from sklearn.inspection import permutation_importance
 import ML as ml
 import EventEngine as ee
 
+GRS = 7182818
+
 
 def sum_score(y_true, y_pred):
     return abs(y_true.sum() - y_pred.sum())
 
 
-def model_test(train, test, target, working_columns, mf_rules, label='main_model'):
-    models = ml.create_models(train, working_columns, mf_rules)
-    predict = ml.sbs_predict(
-        models, train, test.index[-1], target, working_columns, mf_rules)
+def model_test(train, test, target, working_columns, list_mf_rules, label='main_model'):
+    models = ml.create_models(train, working_columns, list_mf_rules)
+    predict = ml.sbs_predict_full(
+        models, train, test.index[-1], target, working_columns, list_mf_rules)
 
-    return {
+    result = {
         'label': label,
-        'rmse': mean_squared_error(test[target], predict, squared=False),
-        'sum_score': sum_score(test[target], predict),
-        'y_predict': predict,
+        'y_predict': predict[target],
+        'target_rmse': mean_squared_error(test[target], predict[target], squared=False),
+        'target_sum_score': sum_score(test[target], predict[target]),
     }
+    for column in set(working_columns) - set([target]):
+        result[column + '_rmse'] = mean_squared_error(
+            test[column], predict[column], squared=False)
+
+    return result
 
 
 def dummy_model_test(train, test, target, label='dummy_model'):
@@ -138,84 +145,96 @@ def iterative_model_test(costs, regular_list, start_date, add_column=False):
     return pd.DataFrame(result)
 
 
-def get_importances(models, X, target, working_columns, mf_rules):
-    x = ml.make_features(X, mf_rules).dropna()
-    y = x[target]
-    x = x.drop(working_columns, axis=1)
+def get_importances(models, X, working_columns, list_mf_rules, random_state=GRS):
+    results = []
 
-    importance = permutation_importance(
-        models[target], x, y, n_repeats=10, random_state=42, n_jobs=-1)
+    for column in working_columns:
+        x = ml.make_features(X, list_mf_rules[column]).dropna()
+        y_working_columns = x[working_columns]
+        x = x.drop(working_columns, axis=1)
 
-    # Говнокод! todo переделать
-    feature_split = []
-    for feature in list(x):
-        split = feature.split(':')
-        if len(split) == 3:
-            feature_split.append(split)
-        else:
-            feature_split.append([np.nan, np.nan, np.nan])
+        # Говнокод! todo переделать
+        feature_split = []
+        for feature in list(x):
+            split = feature.split(':')
+            if len(split) == 3:
+                feature_split.append(split)
+            else:
+                feature_split.append([np.nan, np.nan, np.nan])
 
-    result = pd.DataFrame(feature_split, columns=['root_f', 'type', 'value'])
-    result['feature'] = list(x)
-    result['importances_mean'] = importance.importances_mean
-    return result
+        y = y_working_columns[column]
+
+        importance = permutation_importance(
+            models[column], x, y, n_repeats=10, random_state=random_state, n_jobs=-1, scoring='neg_root_mean_squared_error')
+
+        result = pd.DataFrame(feature_split, columns=[
+                              'root_f', 'type', 'value'])
+        result['feature'] = list(x)
+        result['importances_mean'] = importance.importances_mean
+        result['importance_for'] = column
+
+        results.append(result)
+
+    return pd.concat(results)
 
 
-def estimate_mf_rules(train, target, working_columns, values, step_size=10, best_list_size=5):
+def estimate_mf_rules(train, working_columns, values, step_size=5, best_list_size=2):
     result = pd.DataFrame([], columns=['root_f', 'type',
-                          'value', 'feature', 'importances_mean', 'steps'])
+                          'value', 'feature', 'importances_mean', 'importance_for', 'steps'])
     steps = len(values) // step_size + \
         (0 if len(values) % step_size == 0 else 1)
 
-    for i in range(steps):
+    for i in tqdm(range(steps)):
         if i == steps-1:
             v = values[i*step_size: -1]
         else:
             v = values[i*step_size: (i+1)*step_size]
 
-        mf_rules = [{
+        list_mf_rules = {c2: [{
             'column': c,
-            'lag': v + list(result[(result['root_f'] == c) & (result['type'] == 'lag')].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values),
-            'rolling_mean_size': v + list(result[(result['root_f'] == c) & (result['type'] == 'rm')].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values)
-        } for c in working_columns]
+            'lag': v + list(result[(result['root_f'] == c) & (result['type'] == 'lag') & (result['importance_for'] == c2)].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values),
+            'rolling_mean_size': v + list(result[(result['root_f'] == c) & (result['type'] == 'rm') & (result['importance_for'] == c2)].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values)
+        } for c in working_columns] for c2 in working_columns}
 
-        models = ml.create_models(train, working_columns, mf_rules)
+        models = ml.create_models(train, working_columns, list_mf_rules)
 
         importances = get_importances(
-            models, train, target, working_columns, mf_rules)
+            models, train, working_columns, list_mf_rules)
         importances['steps'] = i
         result = pd.concat([result, importances])
 
-    return result
+    return result.sort_values(by='importances_mean', ascending=False).drop_duplicates(subset=['type', 'value', 'importance_for'])
 
 
 def top_mf_rules(importances, working_columns, size=50):
-    importances = importances.copy().sort_values(
-        by='importances_mean', ascending=False).drop_duplicates(subset=['type', 'value']).head(size)
+    importances = importances.groupby('importance_for').head(size)
 
-    mf_rules = [{
+    list_mf_rules = {c2: [{
         'column': c,
-        'lag': list(importances[(importances['root_f'] == c) & (importances['type'] == 'lag')]['value'].apply(int).values),
-        'rolling_mean_size': list(importances[(importances['root_f'] == c) & (importances['type'] == 'rm')]['value'].apply(int).values)
-    } for c in working_columns]
+        'lag': list(importances[(importances['root_f'] == c) & (importances['type'] == 'lag') & (importances['importance_for'] == c2)]['value'].apply(int).values),
+        'rolling_mean_size': list(importances[(importances['root_f'] == c) & (importances['type'] == 'rm') & (importances['importance_for'] == c2)]['value'].apply(int).values)
+    } for c in working_columns] for c2 in working_columns}
 
-    return mf_rules
+    return list_mf_rules
 
 
-def set_mf_rules_test(train, test, target, working_columns, r1=range(1, 101), r2=range(1, 70)):
-    importances = estimate_mf_rules(train, target, working_columns, list(r1))
+def set_mf_rules_test(train, test, target, working_columns, r1=range(1, 101), r2=range(1, 70), step_size=5, best_list_size=1):
+    importances = estimate_mf_rules(
+        train, working_columns, list(r1), step_size, best_list_size)
 
     test_r2 = []
     for size in tqdm(r2):
-        mf_rules = top_mf_rules(importances, working_columns, size)
+        list_mf_rules = top_mf_rules(importances, working_columns, size)
         test_result = model_test(
-            train, test, target, working_columns, mf_rules)
+            train, test, target, working_columns, list_mf_rules)
 
-        test_r2.append({
+        test_result.pop('label', None)
+        test_result.pop('y_predict', None)
+        test_result.update({
             'mf_rules_size': size,
-            'rmse': test_result['rmse'],
-            'sum_score': test_result['sum_score'],
-            'mf_rules': mf_rules
+            'list_mf_rules': list_mf_rules
         })
+
+        test_r2.append(test_result)
 
     return pd.DataFrame(test_r2)

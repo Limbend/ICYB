@@ -6,7 +6,7 @@ Lag = list(range(1, 13)) + list(range(14, 7 * 12 + 1, 7))
 Rolling_mean_size = list(range(1, 11)) + list(range(14, 7 * 12 + 1, 7))
 
 
-def sbs_predict(models, old_data, end_date, target_column, working_columns, mf_rules, only_negative=True):
+def sbs_predict(models, old_data, end_date, target_column, working_columns, list_mf_rules, only_negative=True):
     '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
 
     Args:
@@ -23,26 +23,48 @@ def sbs_predict(models, old_data, end_date, target_column, working_columns, mf_r
         Спрогнозированные значения.
     '''
 
+    # data = old_data[working_columns].copy()
+    # days_index = pd.date_range(data.index[-1], end_date)[1:]
+    # data = old_data.append(pd.DataFrame(
+    #     [], columns=working_columns, index=days_index))
+
+    # for day in days_index:
+    #     for column in working_columns:
+    #         row = make_features(data.loc[:day], list_mf_rules[column]
+    #                             ).loc[[day]].drop(working_columns, axis=1)
+
+    #         data.loc[day, column] = models[column].predict(row)[0]
+
+    # result = data.loc[days_index, target_column]
+    # if only_negative:
+    #     result[result > 0] = 0
+    # return result
+
+    return sbs_predict_full(models, old_data, end_date, target_column, working_columns, list_mf_rules, only_negative)[target_column]
+
+
+def sbs_predict_full(models, old_data, end_date, target_column, working_columns, list_mf_rules, only_negative=True):
+
     data = old_data[working_columns].copy()
-    day_index = pd.date_range(data.index[-1], end_date)[1:]
+    days_index = pd.date_range(data.index[-1], end_date)[1:]
     data = old_data.append(pd.DataFrame(
-        [], columns=working_columns, index=day_index))
+        [], columns=working_columns, index=days_index))
 
-    for day in day_index:
-        row = make_features(data.loc[:day], mf_rules
-                            ).loc[[day]].drop(working_columns, axis=1)
-
+    for day in days_index:
         for column in working_columns:
+            row = make_features(data.loc[:day], list_mf_rules[column]
+                                ).loc[[day]].drop(working_columns, axis=1)
+
             data.loc[day, column] = models[column].predict(row)[0]
 
-    result = data.loc[day_index, target_column]
+    result = data.loc[days_index, working_columns]
     if only_negative:
-        result[result > 0] = 0
+        result[target_column][result[target_column] > 0] = 0
     return result
 
 
-def default_mf_rules(working_columns, lag=Lag, rolling_mean_size=Rolling_mean_size):
-    return [{'column': c, 'lag': lag, 'rolling_mean_size': rolling_mean_size} for c in working_columns]
+# def default_mf_rules(working_columns, lag=Lag, rolling_mean_size=Rolling_mean_size):
+#     return [{'column': c, 'lag': lag, 'rolling_mean_size': rolling_mean_size} for c in working_columns]
 
 
 def make_features(data, mf_rules):
@@ -76,7 +98,7 @@ def make_features(data, mf_rules):
     return data
 
 
-def create_models(data, working_columns, mf_rules):
+def create_models(data, working_columns, list_mf_rules):
     '''Генерирует признаки, создает и обучает новую модель. 
 
     Args:
@@ -89,20 +111,19 @@ def create_models(data, working_columns, mf_rules):
     Returns:
         Объект модели.
     '''
-    train = make_features(data, mf_rules).dropna()
-
     models = {}
     for column in working_columns:
+        train = make_features(data, list_mf_rules[column]).dropna()
         models[column] = LinearRegression(
             n_jobs=-1).fit(train.drop(working_columns, axis=1), train[column])
     return models
 
 
-def __create_models__(data, models, working_columns):
-    train = make_features(data, working_columns, default_mf_rules(working_columns),
-                          ).dropna()
+# def __create_models__(data, models, working_columns):
+#     train = make_features(data, working_columns, default_mf_rules(working_columns),
+#                           ).dropna()
 
-    for column in working_columns:
-        models[column] = models[column].fit(
-            train.drop(working_columns, axis=1), train[column])
-    return models
+#     for column in working_columns:
+#         models[column] = models[column].fit(
+#             train.drop(working_columns, axis=1), train[column])
+#     return models
