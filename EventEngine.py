@@ -72,7 +72,7 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
         if(r_event['adjust_date']):
             events = costs[get_markers_regular(costs, regular_events.loc[i])]
             if len(events) > 0:
-                r_event['start_date'] = events.iloc[-1]['date']
+                r_event['start_date'] = events.iloc[-1]['date'] + d_date
 
         j = 0
         new_start = r_event['start_date']  # + d_date * j
@@ -90,7 +90,7 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
             pay_date_overdue = g_start_date + relativedelta(days=1)
 
             if(r_event['adjust_date']):
-                # Если между стартовой датой для регулярки r_event['start_date'] и стартовой датой для начала поиска g_start_date есть помешаются регулярки - они являются просрочкой. Количество поместившихся будет в j.
+                # Если между стартовой датой для регулярки r_event['start_date'] и стартовой датой для начала поиска g_start_date помешаются регулярки - они являются просрочкой. Количество поместившихся будет в j.
                 for i_overdue in range(j):
                     result.append((
                         pay_date_overdue,
