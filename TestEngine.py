@@ -54,14 +54,14 @@ def dummy_model_test(train, test, target, label='dummy_model'):
     }
 
 
-def iterative_model_test(costs, regular_list, start_date, add_column=False):
-    working_columns = ['amount'] if not(add_column) else [
+def iterative_model_test(costs, regular_list, start_date, column_adding_method=False):
+    working_columns = ['amount'] if not(column_adding_method) else [
         'amount', 'category_n', 'description_n']
 
     data = ee.preprocessing_for_ml(
-        costs, regular_list, start_date, add_column=add_column)
+        costs, regular_list, start_date, column_adding_method=column_adding_method)
     full_data = ee.preprocessing_for_ml(
-        costs, regular_list[0:0], start_date, add_column=False)
+        costs, regular_list[0:0], start_date, column_adding_method=False)
 
     full_months = int(
         (data.index[-1] - data.index[0]) / np.timedelta64(1, 'M'))
@@ -193,7 +193,7 @@ def estimate_mf_rules(train, working_columns, values, step_size=5, best_list_siz
         list_mf_rules = {c2: [{
             'column': c,
             'lag': v + list(result[(result['root_f'] == c) & (result['type'] == 'lag') & (result['importance_for'] == c2)].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values),
-            'rolling_mean_size': v + list(result[(result['root_f'] == c) & (result['type'] == 'rm') & (result['importance_for'] == c2)].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values)
+            'rm': v + list(result[(result['root_f'] == c) & (result['type'] == 'rm') & (result['importance_for'] == c2)].sort_values(by='importances_mean', ascending=False).head(best_list_size)['value'].apply(int).values)
         } for c in working_columns] for c2 in working_columns}
 
         models = ml.create_models(train, working_columns, list_mf_rules)
@@ -212,7 +212,7 @@ def top_mf_rules(importances, working_columns, size=50):
     list_mf_rules = {c2: [{
         'column': c,
         'lag': list(importances[(importances['root_f'] == c) & (importances['type'] == 'lag') & (importances['importance_for'] == c2)]['value'].apply(int).values),
-        'rolling_mean_size': list(importances[(importances['root_f'] == c) & (importances['type'] == 'rm') & (importances['importance_for'] == c2)]['value'].apply(int).values)
+        'rm': list(importances[(importances['root_f'] == c) & (importances['type'] == 'rm') & (importances['importance_for'] == c2)]['value'].apply(int).values)
     } for c in working_columns] for c2 in working_columns}
 
     return list_mf_rules

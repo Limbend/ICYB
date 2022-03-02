@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import date, datetime
+from datetime import date  # , datetime !!!
 from dateutil.relativedelta import relativedelta
 import ML as ml
 
@@ -199,47 +199,52 @@ def encoder_in_count(data, target_column, top_size, sort_ascending=False):
     return result
 
 
-def preprocessing_for_ml(data, regular_list, start_date, q=0.16, add_column=False):
+def calculate_features(data, method):
+    data = data[['amount', 'category', 'description']]
+
+    if method == 'sum':
+        data['category_n_sum'] = data['category'].map(
+            encoder_in_sum(data, 'category', 'amount', 20)
+        ).fillna(1./21)
+        data['description_n_sum'] = data['description'].map(
+            encoder_in_sum(data, 'description', 'amount', 20)
+        ).fillna(1./21)
+
+    elif method == 'coumt':
+        data['category_n_coumt'] = data['category'].map(
+            encoder_in_count(data, 'category', 20)
+        ).fillna(1./21)
+        data['description_n_coumt'] = data['description'].map(
+            encoder_in_count(data, 'description', 20)
+        ).fillna(1./21)
+
+    return data.drop(['category', 'description'], axis=1)
+
+
+# @@
+def preprocessing_for_ml(data, regular_list, start_date, q=0.16, column_adding_method=False):
     cleared_df = data.copy()
     cleared_df = cleared_df[cleared_df['date'] > start_date]
     cleared_df = drop_paired(cleared_df, 'amount')
 
     # Выделяет только расходы
     markers = cleared_df['amount'] < 0
+
     for i in regular_list.index:
         markers = markers & ~get_markers_regular(
             cleared_df, regular_list.loc[i])
     cleared_df = cleared_df[markers]
 
     cleared_df = drop_outliers(cleared_df, q)
+    cleared_df = cleared_df.set_index('date')
 
-    if add_column == 1:
-        cleared_df['category_n'] = cleared_df['category'].map(
-            encoder_in_sum(cleared_df, 'category', 'amount', 20)
-        ).fillna(1./21)
-        cleared_df['description_n'] = cleared_df['description'].map(
-            encoder_in_sum(cleared_df, 'description', 'amount', 20)
-        ).fillna(1./21)
-
-        cleared_df = cleared_df.set_index(
-            'date')[['amount', 'category_n', 'description_n']].resample('1D').sum()
-
-    elif add_column == 2:
-        cleared_df['category_n'] = cleared_df['category'].map(
-            encoder_in_count(cleared_df, 'category', 20)
-        ).fillna(1./21)
-        cleared_df['description_n'] = cleared_df['description'].map(
-            encoder_in_count(cleared_df, 'description', 20)
-        ).fillna(1./21)
-
-        cleared_df = cleared_df.set_index(
-            'date')[['amount', 'category_n', 'description_n']].resample('1D').sum()
-
+    if column_adding_method:
+        cleared_df = calculate_features(
+            cleared_df, method=column_adding_method)
     else:
-        cleared_df = cleared_df.set_index(
-            'date')[['amount']].resample('1D').sum()
+        cleared_df = cleared_df[['amount']]
 
-    return cleared_df
+    return cleared_df.resample('1D').sum()
 
 
 def predict_regular_events(regular_list, costs, end_date):
@@ -252,17 +257,17 @@ def predict_regular_events(regular_list, costs, end_date):
     return predicted_regular.set_index('date')
 
 
-def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
+def get_full_costs(predicted_regular, clear_costs, balance, models, working_columns, list_mf_rules, end_date):
     full_costs = pd.concat([
         predicted_regular[['amount']],
 
         ml.sbs_predict(
-            model,
+            models,
             clear_costs,
             end_date,
             'amount',
-            ['amount', 'category_n', 'description_n']
-
+            working_columns,
+            list_mf_rules  # @@
         ).to_frame()
     ]).resample('1D').sum()
 
@@ -271,5 +276,5 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
     return full_costs
 
 
-def fit_new_model(data):
-    return ml.create_model(data, ['amount', 'amount', 'category_n', 'description_n'])
+def fit_new_models(data, working_columns, list_mf_rules):
+    return ml.create_models(data, working_columns, list_mf_rules)
