@@ -1,8 +1,17 @@
 import pandas as pd
 import numpy as np
-from datetime import date  # , datetime !!!
+from datetime import date
 from dateutil.relativedelta import relativedelta
 import ML as ml
+
+
+def __get_default_parameters__():
+    return {
+        'models': None,
+        'target_column': 'amount',
+        'column_adding_method': False,
+        'list_mf_rules': {'amount': [{'column': 'amount', 'lag': [2, 4], 'rm': [2, 1, 4, 3]}]}
+    }
 
 
 def get_balance_past(start, costs):
@@ -202,7 +211,7 @@ def encoder_in_count(data, target_column, top_size, sort_ascending=False):
 def calculate_features(data, method):
     data = data[['amount', 'category', 'description']]
 
-    if method == 'sum':
+    if method in ('sum', 'coumt_sum'):
         data['category_n_sum'] = data['category'].map(
             encoder_in_sum(data, 'category', 'amount', 20)
         ).fillna(1./21)
@@ -210,7 +219,7 @@ def calculate_features(data, method):
             encoder_in_sum(data, 'description', 'amount', 20)
         ).fillna(1./21)
 
-    elif method == 'coumt':
+    if method in ('coumt', 'coumt_sum'):
         data['category_n_coumt'] = data['category'].map(
             encoder_in_count(data, 'category', 20)
         ).fillna(1./21)
@@ -221,10 +230,8 @@ def calculate_features(data, method):
     return data.drop(['category', 'description'], axis=1)
 
 
-# @@
-def preprocessing_for_ml(data, regular_list, start_date, q=0.16, column_adding_method=False):
+def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     cleared_df = data.copy()
-    cleared_df = cleared_df[cleared_df['date'] > start_date]
     cleared_df = drop_paired(cleared_df, 'amount')
 
     # Выделяет только расходы
@@ -235,8 +242,15 @@ def preprocessing_for_ml(data, regular_list, start_date, q=0.16, column_adding_m
             cleared_df, regular_list.loc[i])
     cleared_df = cleared_df[markers]
 
+
     cleared_df = drop_outliers(cleared_df, q)
     cleared_df = cleared_df.set_index('date')
+
+    if sbs_model is None:
+        column_adding_method = __get_default_parameters__()[
+            'column_adding_method']
+    else:
+        column_adding_method = sbs_model.column_adding_method
 
     if column_adding_method:
         cleared_df = calculate_features(
@@ -257,18 +271,10 @@ def predict_regular_events(regular_list, costs, end_date):
     return predicted_regular.set_index('date')
 
 
-def get_full_costs(predicted_regular, clear_costs, balance, models, working_columns, list_mf_rules, end_date):
+def get_full_costs(predicted_regular, clear_costs, balance, sbs_model, end_date):
     full_costs = pd.concat([
         predicted_regular[['amount']],
-
-        ml.sbs_predict(
-            models,
-            clear_costs,
-            end_date,
-            'amount',
-            working_columns,
-            list_mf_rules  # @@
-        ).to_frame()
+        sbs_model.predict(clear_costs, end_date).to_frame()
     ]).resample('1D').sum()
 
     full_costs['balance'] = get_balance_future(balance, full_costs['amount'])
@@ -276,5 +282,9 @@ def get_full_costs(predicted_regular, clear_costs, balance, models, working_colu
     return full_costs
 
 
-def fit_new_models(data, working_columns, list_mf_rules):
-    return ml.create_models(data, working_columns, list_mf_rules)
+def fit_model(data, sbs_model=None):
+    if sbs_model is None:
+        sbs_model = ml.SbsModel(**__get_default_parameters__())
+
+    sbs_model.fit(data)
+    return sbs_model

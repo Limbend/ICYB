@@ -1,7 +1,5 @@
 import DataLoader as dl
 import EventEngine as ee
-from datetime import date, datetime
-from dateutil.relativedelta import relativedelta
 import time
 import Visual
 
@@ -12,26 +10,23 @@ class User:
     Attributes:
         id: id пользователя.
         costs: список расходов.
-        model: модель для прогноза расходов для этого пользователя.
+        sbs_model: список моделей, под каждую фичу, для прогноза расходов для этого пользователя.
         regular_list: список регулярных расходов.
         predicted_regular: рассчитанные регулярные расходы до указанной даты.
     '''
 
     def __init__(self, id, db_engine):
-        self.id = id
-        self.download_full_info(db_engine)
-
-    def download_full_info(self, db_engine):
         '''Загружает всю информацию из базы данных
 
         Args:
             db_engine: объект для работы с базой данных.
         '''
+
+        self.id = id
+
         self.costs = db_engine.download_costs(self.id)
-
+        self.sbs_model = db_engine.download_last_model(self.id)
         self.regular_list = db_engine.download_regular(self.id)
-
-        self.model = db_engine.download_last_model(self.id)
 
     def load_from_file(self, db_engine, file_full_name, new_balance):
         '''Загружает, обрабатывает и сохраняет расходы из файла. Соединяет новую информацию из файла с расходами сохраненными в базу до этого
@@ -49,7 +44,6 @@ class User:
         self.costs['balance'] = ee.get_balance_past(
             new_balance, self.costs['amount'])
         self.costs = ee.get_all_costs(self.costs, db_engine, self.id)
-        # self.loaded = True
         ee.save_new_costs(self.costs, db_engine, self.id)
         return self.costs
 
@@ -66,30 +60,30 @@ class User:
             self.regular_list, self.costs, end_date)
         return self.predicted_regular
 
-    def predict_full(self, end_date, start_date=datetime(2020, 11, 21)):
+    def predict_full(self, end_date):
         '''Прогнозирует расходы. Регулярные и предсказанные расходы складываются.
 
         Args:
             end_date: дата до которой строить прогноз.
-            start_date: начальная дата с которой использовать данные для обучения.
 
         Returns:
             Датафрейм расходов с колонками ['amount', 'balance']
         '''
+        data = ee.preprocessing_for_ml(self.costs, self.regular_list, self.sbs_model)
+
         return ee.get_full_costs(
             self.predicted_regular,
-            ee.preprocessing_for_ml(self.costs, self.regular_list, start_date),
+            data,
             self.costs['balance'].iloc[-1],
-            self.model,
+            self.sbs_model,
             end_date
         )
 
-    def fit_new_model(self, db_engine, start_date=datetime(2020, 11, 21)):
+    def fit_new_model(self, db_engine):
         '''Создает, учит и сохраняет модель для пользователя.
 
         Args:
             db_engine: объект для работы с базой данных.
-            start_date: начальная дата с которой использовать данные для обучения.
 
         Returns:
             Отчет о обучении модели. Словарь формата {'time', 'event_count', 'ml_event_count'}
@@ -99,12 +93,12 @@ class User:
         '''
         start_time = time.time()
         data = ee.preprocessing_for_ml(
-            self.costs, self.regular_list, start_date)
+            self.costs, self.regular_list, self.sbs_model)
 
-        self.model = ee.fit_new_model(data)
+        self.sbs_model = ee.fit_model(data, self.sbs_model)
 
         time_passed = time.time() - start_time
-        db_engine.upload_model(self.id, self.model)
+        db_engine.upload_model(self.id, self.sbs_model)
 
         return {'time': time_passed, 'event_count': len(self.costs), 'ml_event_count': len(data)}
 
@@ -135,7 +129,6 @@ class UserManager:
                 return u
         # if not found:
         new_u = User(user_id, self.db_engine)
-        new_u.download_full_info(self.db_engine)
         self.user_list.append(new_u)
         return new_u
 
@@ -181,7 +174,7 @@ class UserManager:
         return user.predict_full(end_date)
 
     def fit_new_model(self, user_id):
-        '''Создает, учит и сохраняет модель для пользователя.
+        '''Создает, учит и сохраняет модели для пользователя.
 
         Args:
             user_id: id пользователя.
@@ -212,5 +205,4 @@ class UserManager:
         return {
             'costs': Visual.costs_plot(full_costs),
             'regular': Visual.df_to_text(regular_events[['amount', 'description']])
-            # 'regular': Visual.df_to_image(regular_events[['amount', 'description']], './temp/output.np.png')
         }

@@ -2,13 +2,13 @@ from sklearn.linear_model import LinearRegression
 import pandas as pd
 
 
-class sbs_model:
+class SbsModel:
     '''Класс модели, выполняющий прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего.
 
     Attributes:
         models: словарь моделией под каждую фичу.
         target_column: имя колонки целевого признака.
-        working_columns: имена колонок которые использовать для генерации фичей.
+        column_adding_method: медод генерации новых фич.
         list_mf_rules: список правил для генерации фичей, под каждую модель, формата:
             {
                 'column_name_1': [
@@ -16,7 +16,7 @@ class sbs_model:
                     {'column': 'column_name_2', 'lag': [...], 'rm': [...]},
                     ...
                 ],
-                'column_name_2': [
+                                    'column_name_2': [
                     {'column': 'column_name_1', 'lag': [...], 'rm': [...]},
                     {'column': 'column_name_2', 'lag': [...], 'rm': [...]},
                     ...
@@ -28,11 +28,11 @@ class sbs_model:
             rm: список размеров скользящего среднего.
     '''
 
-    def __init__(self, models, column_adding_method, list_mf_rules, target_column):
+    def __init__(self, models, target_column, column_adding_method, list_mf_rules):
         self.models = models
+        self.target_column = target_column
         self.column_adding_method = column_adding_method
         self.list_mf_rules = list_mf_rules
-        self.target_column = target_column
 
     def predict(self, old_data, end_date, only_negative=True):  # @@ sbs_predict
         '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
@@ -46,7 +46,7 @@ class sbs_model:
             Спрогнозированные значения.
         '''
 
-        return self.predict_full(self, old_data, end_date, only_negative)[self.target_column]
+        return self.predict_full(old_data, end_date, only_negative)[self.target_column]
 
     def predict_full(self, old_data, end_date, only_negative=True):  # @@ sbs_predict_full
         '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего.
