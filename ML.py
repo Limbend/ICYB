@@ -28,13 +28,12 @@ class SbsModel:
             rm: список размеров скользящего среднего.
     '''
 
-    def __init__(self, models, target_column, column_adding_method, list_mf_rules):
-        self.models = models
+    def __init__(self, target_column, column_adding_method, list_mf_rules):
         self.target_column = target_column
         self.column_adding_method = column_adding_method
         self.list_mf_rules = list_mf_rules
 
-    def predict(self, old_data, end_date, only_negative=True):  # @@ sbs_predict
+    def predict(self, old_data, end_date, only_negative=True):
         '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
 
         Args:
@@ -48,7 +47,7 @@ class SbsModel:
 
         return self.predict_full(old_data, end_date, only_negative)[self.target_column]
 
-    def predict_full(self, old_data, end_date, only_negative=True):  # @@ sbs_predict_full
+    def predict_full(self, old_data, end_date, only_negative=True):
         '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего.
 
         Args:
@@ -115,7 +114,7 @@ class SbsModel:
 
         return data
 
-    def fit(self, data):  # @@ create_models
+    def fit(self, data):
         '''Генерирует признаки, создает и обучает новую модель под каждую фичу.
 
         Args:
@@ -129,3 +128,5 @@ class SbsModel:
                 n_jobs=-1).fit(train.drop(self.list_mf_rules.keys(), axis=1), train[column])
 
         self.models = models
+
+        return self

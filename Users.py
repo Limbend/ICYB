@@ -69,7 +69,8 @@ class User:
         Returns:
             Датафрейм расходов с колонками ['amount', 'balance']
         '''
-        data = ee.preprocessing_for_ml(self.costs, self.regular_list, self.sbs_model)
+        data = ee.preprocessing_for_ml(
+            self.costs, self.regular_list, self.sbs_model)
 
         return ee.get_full_costs(
             self.predicted_regular,

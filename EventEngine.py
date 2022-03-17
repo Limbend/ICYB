@@ -7,7 +7,6 @@ import ML as ml
 
 def __get_default_parameters__():
     return {
-        'models': None,
         'target_column': 'amount',
         'column_adding_method': False,
         'list_mf_rules': {'amount': [{'column': 'amount', 'lag': [2, 4], 'rm': [2, 1, 4, 3]}]}
@@ -241,7 +240,6 @@ def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
         markers = markers & ~get_markers_regular(
             cleared_df, regular_list.loc[i])
     cleared_df = cleared_df[markers]
-
 
     cleared_df = drop_outliers(cleared_df, q)
     cleared_df = cleared_df.set_index('date')
