@@ -36,24 +36,29 @@ class DB_Engine:
     def download_regular(self, user_id, table='regular'):
         return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
 
-    def download_costs(self, user_id, table='costs'):
-        return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY date', self.connector)
+    def download_costs(self, user_id, table='transactions'):
+        return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date', self.connector)
 
-    def add_costs(self, data, user_id, table='costs'):
+    def add_costs(self, data, user_id, table='transactions'):
         data = data[['date', 'amount', 'category',
                      'description', 'balance']].copy().sort_values('date')
-        data['user_id'] = [user_id]*len(data)
+        data['user_id'] = user_id
+        data['is_del'] = False
+
         data.to_sql(table, self.connector, schema=self.schema,
                     if_exists='append', index=False)
 
-    def download_last_model(self, user_id, table='models'):
+    def download_last_model(self, user_id, table='sbs_models'):
+        df = pd.read_sql(
+            f'SELECT dump FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY id DESC LIMIT 1', self.connector)
+        if df.empty:
+            return None
+
         return pickle.loads(
-            pd.read_sql(
-                f'SELECT dump FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY id DESC LIMIT 1', self.connector
-            ).loc[0, 'dump']
+            df.loc[0, 'dump']
         )
 
-    def upload_model(self, user_id, model, table='models'):
+    def upload_model(self, user_id, model, table='sbs_models'):
         pd.DataFrame([[
             user_id,
             pickle.dumps(model)

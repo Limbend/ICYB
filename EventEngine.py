@@ -1,8 +1,16 @@
 import pandas as pd
 import numpy as np
-from datetime import date, datetime
+from datetime import date
 from dateutil.relativedelta import relativedelta
 import ML as ml
+
+
+def __get_default_parameters__():
+    return {
+        'target_column': 'amount',
+        'column_adding_method': False,
+        'list_mf_rules': {'amount': [{'column': 'amount', 'lag': [2, 4], 'rm': [2, 1, 4, 3]}]}
+    }
 
 
 def get_balance_past(start, costs):
@@ -183,23 +191,72 @@ def drop_outliers(data, q=0.16):
     return data
 
 
-def preprocessing_for_ml(data, regular_list, start_date, q=0.16):
+def encoder_in_sum(data, target_column, sum_column, top_size, sort_ascending=True):
+    result = data.groupby(target_column)[sum_column].sum(
+    ).sort_values(ascending=sort_ascending)[:top_size]
+    result = {name: (top_size-i+1)/(top_size+1)
+              for i, name in enumerate(result.index)}
+    return result
+
+
+def encoder_in_count(data, target_column, top_size, sort_ascending=False):
+    result = data.groupby(target_column)[target_column].count(
+    ).sort_values(ascending=sort_ascending)[:top_size]
+    result = {name: (top_size-i+1)/(top_size+1)
+              for i, name in enumerate(result.index)}
+    return result
+
+
+def calculate_features(data, method):
+    data = data[['amount', 'category', 'description']]
+
+    if method in ('sum', 'coumt_sum'):
+        data['category_n_sum'] = data['category'].map(
+            encoder_in_sum(data, 'category', 'amount', 20)
+        ).fillna(1./21)
+        data['description_n_sum'] = data['description'].map(
+            encoder_in_sum(data, 'description', 'amount', 20)
+        ).fillna(1./21)
+
+    if method in ('coumt', 'coumt_sum'):
+        data['category_n_coumt'] = data['category'].map(
+            encoder_in_count(data, 'category', 20)
+        ).fillna(1./21)
+        data['description_n_coumt'] = data['description'].map(
+            encoder_in_count(data, 'description', 20)
+        ).fillna(1./21)
+
+    return data.drop(['category', 'description'], axis=1)
+
+
+def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     cleared_df = data.copy()
-    cleared_df = cleared_df[cleared_df['date'] > start_date]
     cleared_df = drop_paired(cleared_df, 'amount')
 
     # Выделяет только расходы
     markers = cleared_df['amount'] < 0
+
     for i in regular_list.index:
         markers = markers & ~get_markers_regular(
             cleared_df, regular_list.loc[i])
     cleared_df = cleared_df[markers]
 
     cleared_df = drop_outliers(cleared_df, q)
+    cleared_df = cleared_df.set_index('date')
 
-    cleared_df = cleared_df.set_index('date')[['amount']].resample('1D').sum()
+    if sbs_model is None:
+        column_adding_method = __get_default_parameters__()[
+            'column_adding_method']
+    else:
+        column_adding_method = sbs_model.column_adding_method
 
-    return cleared_df
+    if column_adding_method:
+        cleared_df = calculate_features(
+            cleared_df, method=column_adding_method)
+    else:
+        cleared_df = cleared_df[['amount']]
+
+    return cleared_df.resample('1D').sum()
 
 
 def predict_regular_events(regular_list, costs, end_date):
@@ -212,17 +269,10 @@ def predict_regular_events(regular_list, costs, end_date):
     return predicted_regular.set_index('date')
 
 
-def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
+def get_full_costs(predicted_regular, clear_costs, balance, sbs_model, end_date):
     full_costs = pd.concat([
         predicted_regular[['amount']],
-
-        ml.sbs_predict(
-            model,
-            clear_costs,
-            end_date,
-            'amount'
-
-        ).to_frame()
+        sbs_model.predict(clear_costs, end_date).to_frame()
     ]).resample('1D').sum()
 
     full_costs['balance'] = get_balance_future(balance, full_costs['amount'])
@@ -230,5 +280,9 @@ def get_full_costs(predicted_regular, clear_costs, balance, model, end_date):
     return full_costs
 
 
-def fit_new_model(data):
-    return ml.create_model(data, 'amount')
+def fit_model(data, sbs_model=None):
+    if sbs_model is None:
+        sbs_model = ml.SbsModel(**__get_default_parameters__())
+
+    sbs_model.fit(data)
+    return sbs_model

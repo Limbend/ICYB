@@ -1,98 +1,132 @@
-from numpy import result_type
 from sklearn.linear_model import LinearRegression
 import pandas as pd
 
-Lag = list(range(1, 13)) + list(range(14, 7 * 12 + 1, 7))
-Rolling_mean_size = list(range(1, 11)) + list(range(14, 7 * 12 + 1, 7))
 
+class SbsModel:
+    '''Класс модели, выполняющий прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего.
 
-def sbs_predict(model, old_data, end_date, target_column, only_negative=True, lag=Lag, rolling_mean_size=Rolling_mean_size):
-    '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
-
-    Args:
-        model: объект модели.
-        old_data: уже известные данные за прошлый период.
-        end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
+    Attributes:
+        models: словарь моделией под каждую фичу.
         target_column: имя колонки целевого признака.
-        only_negative: итоговый прогноз будет обнуляться, если модель выдаст значения больше нуля.
-        lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
-        rolling_mean_size: список размеров для создания признаков скользящего среднего
+        column_adding_method: медод генерации новых фич.
+        list_mf_rules: список правил для генерации фичей, под каждую модель, формата:
+            {
+                'column_name_1': [
+                    {'column': 'column_name_1', 'lag': [...], 'rm': [...]},
+                    {'column': 'column_name_2', 'lag': [...], 'rm': [...]},
+                    ...
+                ],
+                                    'column_name_2': [
+                    {'column': 'column_name_1', 'lag': [...], 'rm': [...]},
+                    {'column': 'column_name_2', 'lag': [...], 'rm': [...]},
+                    ...
+                ],
+                ...
+            }
 
-    Returns:
-        Спрогнозированные значения.
+            lag: список сдвигов.
+            rm: список размеров скользящего среднего.
     '''
 
-    data = old_data[[target_column]].copy()
-    day_index = pd.date_range(data.index[-1], end_date)[1:]
-    data = old_data.append(pd.DataFrame(
-        [], columns=[target_column], index=day_index))
+    def __init__(self, target_column, column_adding_method, list_mf_rules):
+        self.target_column = target_column
+        self.column_adding_method = column_adding_method
+        self.list_mf_rules = list_mf_rules
 
-    for day in day_index:
-        row = make_features(data.loc[:day], target_column,
-                            lag,
-                            rolling_mean_size
-                            ).loc[[day]].drop(target_column, axis=1)
+    def predict(self, old_data, end_date, only_negative=True):
+        '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего. 
 
-        data.loc[day, target_column] = model.predict(row)[0]
+        Args:
+            old_data: уже известные данные за прошлый период.
+            end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
+            only_negative: итоговый прогноз будет обнуляться, если модель выдаст значения больше нуля.
 
-    result = data.loc[day_index, target_column]
-    if only_negative:
-        result[result > 0] = 0
-    return result
+        Returns:
+            Спрогнозированные значения.
+        '''
 
+        return self.predict_full(old_data, end_date, only_negative)[self.target_column]
 
-def make_features(data, target, lag, rolling_mean_size):
-    '''Рассчитывает дополнительные признаки для временного ряда. 
+    def predict_full(self, old_data, end_date, only_negative=True):
+        '''Выполнят прогноз построчно, позволяя использовать результаты предыдущего прогноза, для расчета признаков следующего.
 
-    Args:
-        data: исходный временной ряд.
-        target: имя колонки целевого признака.
-        lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
-        rolling_mean_size: список размеров для создания признаков скользящего среднего
+        Args:
+            old_data: уже известные данные за прошлый период.
+            end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
+            only_negative: итоговый прогноз будет обнуляться, если модель выдаст значения больше нуля.
 
-    Returns:
-        Копия датафрейма data в который добавлены новые признаки.
-    '''
+        Returns:
+            Спрогнозированные значения, для всех фич.
+        '''
+        working_columns = self.models.keys()
+        data = old_data[working_columns].copy()
+        days_index = pd.date_range(data.index[-1], end_date)[1:]
+        data = old_data.append(pd.DataFrame(
+            [], columns=working_columns, index=days_index))
 
-    data = data.copy()
-    index = data.index
-    # data['year'] = index.year
-    data['month'] = index.month
-    data['day'] = index.day
-    data['dayofweek'] = index.dayofweek
+        for day in days_index:
+            for column in working_columns:
+                row = self.make_features(data.loc[:day], self.list_mf_rules[column]
+                                         ).loc[[day]].drop(working_columns, axis=1)
 
-    if type(lag) is list:
-        for l in lag:
-            data[f'lag_{l}'] = data[target].shift(l)
-    else:
-        for l in range(1, lag + 1):
-            data[f'lag_{l}'] = data[target].shift(l)
+                data.loc[day, column] = self.models[column].predict(row)[0]
 
-    if type(rolling_mean_size) is list:
-        for r in rolling_mean_size:
-            data[f'rolling_mean_{r}'] = data[target].shift().rolling(r).mean()
-    else:
-        data[f'rolling_mean_{rolling_mean_size}'] = data[target].shift().rolling(
-            rolling_mean_size).mean()
+        result = data.loc[days_index, working_columns]
+        if only_negative:
+            result[self.target_column][result[self.target_column] > 0] = 0
+        return result
 
-    return data
+    def make_features(self, data, mf_rules):
+        '''Рассчитывает дополнительные признаки для временного ряда. 
 
+        Args:
+            data: исходный временной ряд.
+            column: имя колонки целевого признака.
+            mf_rules: список правил для генерации фичей, формата:
+                [
+                    {'column': 'column_name_1', 'lag': [...], 'rm': [...]},
+                    {'column': 'column_name_2', 'lag': [...], 'rm': [...]},
+                    ...
+                ]
 
-def create_model(data, target, lag=Lag, rolling_mean_size=Rolling_mean_size):
-    '''Генерирует признаки, создает и обучает новую модель. 
+                lag: список сдвигов.
+                rm: список размеров скользящего среднего.
 
-    Args:
-        data: датафрейм временного ряда.
-        target: имя колонки целевого признака.
-        lag: список размеров сдвига для создания признаков из значений предыдущего периода. !! todo переформулировать это
-        rolling_mean_size: список размеров для создания признаков скользящего среднего
+        Returns:
+            Копия датафрейма data в который добавлены новые признаки.
+        '''
 
-    Returns:
-        Объект модели.
-    '''
-    train = make_features(data, target,
-                          lag,
-                          rolling_mean_size
-                          ).dropna()
+        data = data.copy()
+        index = data.index
+        data['year'] = index.year
+        data['month'] = index.month
+        data['day'] = index.day
+        data['dayofweek'] = index.dayofweek
 
-    return LinearRegression(n_jobs=2).fit(train.drop(target, axis=1), train[target])
+        for rule in mf_rules:
+            for l in rule['lag']:
+                data[f'{rule["column"]}:lag:{l}'] = data[rule['column']].shift(
+                    l)
+
+            for r in rule['rm']:
+                data[f'{rule["column"]}:rm:{r}'] = data[rule['column']
+                                                        ].shift().rolling(r).mean()
+
+        return data
+
+    def fit(self, data):
+        '''Генерирует признаки, создает и обучает новую модель под каждую фичу.
+
+        Args:
+            data: датафрейм временного ряда.
+        '''
+        models = {}
+        for column in self.list_mf_rules.keys():
+            train = self.make_features(
+                data, self.list_mf_rules[column]).dropna()
+            models[column] = LinearRegression(
+                n_jobs=-1).fit(train.drop(self.list_mf_rules.keys(), axis=1), train[column])
+
+        self.models = models
+
+        return self
