@@ -13,13 +13,13 @@ def __get_default_parameters__():
     }
 
 
-def get_balance_past(start, costs):
-    result = costs.cumsum()
+def get_balance_past(start, transactions):
+    result = transactions.cumsum()
     return result + (start - result.iloc[-1])
 
 
-def get_balance_future(start, costs):
-    return costs.cumsum() + start
+def get_balance_future(start, transactions):
+    return transactions.cumsum() + start
 
 
 def get_markers_regular(data, event):
@@ -47,7 +47,7 @@ def get_markers_regular(data, event):
         f'The search function /"{event["search_f"]}/" does not exist')
 
 
-def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
+def get_regular_events(regular_events, transactions, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
     new_regular_events = regular_events.copy()
     result = []
     j_limit = 1000
@@ -66,7 +66,7 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
 
         # Обновление цены
         if(r_event['adjust_price']):
-            amounts = costs[get_markers_regular(costs, r_event)].tail(window_price)[
+            amounts = transactions[get_markers_regular(transactions, r_event)].tail(window_price)[
                 'amount']
             if(len(amounts) > 0):
                 if uniform_distribution:
@@ -78,7 +78,7 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
 
         # Обновление начальной даты
         if(r_event['adjust_date']):
-            events = costs[get_markers_regular(costs, regular_events.loc[i])]
+            events = transactions[get_markers_regular(transactions, regular_events.loc[i])]
             if len(events) > 0:
                 r_event['start_date'] = events.iloc[-1]['date'] + d_date
 
@@ -113,7 +113,7 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
                 # Вычесть из них сколько по факту было.
 
                 count_overdue = j - sum(get_markers_regular(
-                    costs[costs['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1
+                    transactions[transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1
                 # Если число положительное, то есть просрочки.
                 if(count_overdue > 0):
                     for i_overdue in range(count_overdue):
@@ -155,26 +155,26 @@ def get_regular_events(regular_events, costs, g_start_date, g_end_date, window_p
     return df_events
 
 
-def get_all_costs(new_costs, db_engine, user_id):
-    old_costs = db_engine.download_costs(user_id)
-    old_costs['is_new'] = False
-    new_costs = new_costs.copy()
-    new_costs['is_new'] = True
+def get_all_transactions(new_transactions, db_engine, user_id):
+    old_transactions = db_engine.download_transactions(user_id)
+    old_transactions['is_new'] = False
+    new_transactions = new_transactions.copy()
+    new_transactions['is_new'] = True
 
-    return pd.concat([old_costs, new_costs]).drop_duplicates(subset=['date', 'amount']).sort_values('date')
+    return pd.concat([old_transactions, new_transactions]).drop_duplicates(subset=['date', 'amount']).sort_values('date')
 
 
-def save_new_costs(full_costs, db_engine, user_id):
-    if (len(full_costs[~full_costs['is_new']]) > 0) and \
-        (len(full_costs[full_costs['is_new']]) > 0) and \
-            (full_costs[~full_costs['is_new']].iloc[-1]['date'] > full_costs[full_costs['is_new']].iloc[0]['date']):
+def save_new_transactions(full_transactions, db_engine, user_id):
+    if (len(full_transactions[~full_transactions['is_new']]) > 0) and \
+        (len(full_transactions[full_transactions['is_new']]) > 0) and \
+            (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > full_transactions[full_transactions['is_new']].iloc[0]['date']):
 
         # todo позже добавить обработку этого события !!!
         raise Exception(
             f'Events added retroactively were detected. Such a database update has not yet been implemented. The change has not been entered into the database!')
 
-    db_engine.add_costs(full_costs[full_costs['is_new']], user_id=user_id)
-    return (full_costs['is_new'].sum(), 0)
+    db_engine.add_transactions(full_transactions[full_transactions['is_new']], user_id=user_id)
+    return (full_transactions['is_new'].sum(), 0)
 
 
 def drop_paired(data: pd.DataFrame, by: str):
@@ -259,25 +259,25 @@ def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     return cleared_df.resample('1D').sum()
 
 
-def predict_regular_events(regular_list, costs, end_date):
-    balance = costs['balance'].iloc[-1]
+def predict_regular_events(regular_list, transactions, end_date):
+    balance = transactions['balance'].iloc[-1]
     predicted_regular = get_regular_events(
-        regular_list, costs, date.today(), end_date)
+        regular_list, transactions, date.today(), end_date)
 
     predicted_regular['balance'] = get_balance_future(
         balance, predicted_regular['amount'])
     return predicted_regular.set_index('date')
 
 
-def get_full_costs(predicted_regular, clear_costs, balance, sbs_model, end_date):
-    full_costs = pd.concat([
+def get_full_transactions(predicted_regular, clear_transactions, balance, sbs_model, end_date):
+    full_transactions = pd.concat([
         predicted_regular[['amount']],
-        sbs_model.predict(clear_costs, end_date).to_frame()
+        sbs_model.predict(clear_transactions, end_date).to_frame()
     ]).resample('1D').sum()
 
-    full_costs['balance'] = get_balance_future(balance, full_costs['amount'])
+    full_transactions['balance'] = get_balance_future(balance, full_transactions['amount'])
 
-    return full_costs
+    return full_transactions
 
 
 def fit_model(data, sbs_model=None):

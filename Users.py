@@ -9,7 +9,7 @@ class User:
 
     Attributes:
         id: id пользователя.
-        costs: список расходов.
+        transactions: список расходов.
         sbs_model: список моделей, под каждую фичу, для прогноза расходов для этого пользователя.
         regular_list: список регулярных расходов.
         predicted_regular: рассчитанные регулярные расходы до указанной даты.
@@ -24,7 +24,7 @@ class User:
 
         self.id = id
 
-        self.costs = db_engine.download_costs(self.id)
+        self.transactions = db_engine.download_transactions(self.id)
         self.sbs_model = db_engine.download_last_model(self.id)
         self.regular_list = db_engine.download_regular(self.id)
 
@@ -40,12 +40,12 @@ class User:
             Датафрейм всех расходов с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-        self.costs = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
-        self.costs['balance'] = ee.get_balance_past(
-            new_balance, self.costs['amount'])
-        self.costs = ee.get_all_costs(self.costs, db_engine, self.id)
-        ee.save_new_costs(self.costs, db_engine, self.id)
-        return self.costs
+        self.transactions = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
+        self.transactions['balance'] = ee.get_balance_past(
+            new_balance, self.transactions['amount'])
+        self.transactions = ee.get_all_transactions(self.transactions, db_engine, self.id)
+        ee.save_new_transactions(self.transactions, db_engine, self.id)
+        return self.transactions
 
     def predict_regular(self, end_date):
         '''Прогнозирует регулярные расходы.
@@ -57,7 +57,7 @@ class User:
             Датафрейм регулярных расходов с колонками ['amount', 'category', 'description', 'balance']
         '''
         self.predicted_regular = ee.predict_regular_events(
-            self.regular_list, self.costs, end_date)
+            self.regular_list, self.transactions, end_date)
         return self.predicted_regular
 
     def predict_full(self, end_date):
@@ -70,12 +70,12 @@ class User:
             Датафрейм расходов с колонками ['amount', 'balance']
         '''
         data = ee.preprocessing_for_ml(
-            self.costs, self.regular_list, self.sbs_model)
+            self.transactions, self.regular_list, self.sbs_model)
 
-        return ee.get_full_costs(
+        return ee.get_full_transactions(
             self.predicted_regular,
             data,
-            self.costs['balance'].iloc[-1],
+            self.transactions['balance'].iloc[-1],
             self.sbs_model,
             end_date
         )
@@ -94,14 +94,14 @@ class User:
         '''
         start_time = time.time()
         data = ee.preprocessing_for_ml(
-            self.costs, self.regular_list, self.sbs_model)
+            self.transactions, self.regular_list, self.sbs_model)
 
         self.sbs_model = ee.fit_model(data, self.sbs_model)
 
         time_passed = time.time() - start_time
         db_engine.upload_model(self.id, self.sbs_model)
 
-        return {'time': time_passed, 'event_count': len(self.costs), 'ml_event_count': len(data)}
+        return {'time': time_passed, 'event_count': len(self.transactions), 'ml_event_count': len(data)}
 
 
 class UserManager:
@@ -201,9 +201,9 @@ class UserManager:
             Словарь с изображениями в двоичном формате.
         '''
         regular_events = self.predict_regular(user_id, end_date)
-        full_costs = self.predict_full(user_id, end_date)
+        full_transactions = self.predict_full(user_id, end_date)
 
         return {
-            'costs': Visual.costs_plot(full_costs),
+            'transactions': Visual.transactions_plot(full_transactions),
             'regular': Visual.df_to_text(regular_events[['amount', 'description']])
         }

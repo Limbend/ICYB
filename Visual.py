@@ -5,21 +5,21 @@ import seaborn as sns
 import io
 
 
-def costs_plot(costs):
+def transactions_plot(transactions):
     formatter = DateFormatter('%d.%m.%Y')
 
     sns.set(font_scale=1.4, style="whitegrid")
     plt.rcParams['figure.figsize'] = (19.5, 9)
 
-    ax = sns.lineplot(data=costs['balance'], linewidth=4.)
+    ax = sns.lineplot(data=transactions['balance'], linewidth=4.)
     ax.xaxis.set_major_formatter(formatter)
 
-    ax.hlines(costs['balance'].min(), costs.index[0],
-              costs.index[-1], color='r', linewidth=3, linestyle='--')
+    ax.hlines(transactions['balance'].min(), transactions.index[0],
+              transactions.index[-1], color='r', linewidth=3, linestyle='--')
     ax.text(
-        costs[costs['balance'] == costs['balance'].min()].index,
-        costs['balance'].min()*.8,
-        f"Минимальный баланс: {costs['balance'].min():.2f}   ({costs[costs['balance'] == costs['balance'].min()].index[0]:%d.%m.%Y})",
+        transactions[transactions['balance'] == transactions['balance'].min()].index,
+        transactions['balance'].min()*.8,
+        f"Минимальный баланс: {transactions['balance'].min():.2f}   ({transactions[transactions['balance'] == transactions['balance'].min()].index[0]:%d.%m.%Y})",
         color='w',
         backgroundcolor='b'
     )

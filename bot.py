@@ -45,7 +45,7 @@ def monthly_forecast(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     report_obj = manager.get_report_obj(
         user_id, date.today() + relativedelta(months=1))
-    update.message.reply_photo(photo=report_obj['costs'], quote=True)
+    update.message.reply_photo(photo=report_obj['transactions'], quote=True)
     # update.message.reply_photo(photo=report_obj['regular'], quote=False)
     update.message.reply_text(text=report_obj['regular'], quote=False)
 

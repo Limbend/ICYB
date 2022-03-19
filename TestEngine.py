@@ -53,9 +53,9 @@ def dummy_model_test(train, test, target, label='dummy_model'):
     }
 
 
-def iterative_model_test(sbs_model, costs, regular_list):
-    data = ee.preprocessing_for_ml(costs, regular_list, sbs_model)
-    full_data = ee.preprocessing_for_ml(costs, regular_list[0:0], sbs_model)
+def iterative_model_test(sbs_model, transactions, regular_list):
+    data = ee.preprocessing_for_ml(transactions, regular_list, sbs_model)
+    full_data = ee.preprocessing_for_ml(transactions, regular_list[0:0], sbs_model)
 
     full_months = int(
         (data.index[-1] - data.index[0]) / np.timedelta64(1, 'M'))
@@ -93,7 +93,7 @@ def iterative_model_test(sbs_model, costs, regular_list):
         # test main_model 'isfull': True
         # ==============================
         regular_events = ee.get_regular_events(
-            regular_list, costs, test_date, test_date + relativedelta(months=1)).set_index('date')
+            regular_list, transactions, test_date, test_date + relativedelta(months=1)).set_index('date')
         # Работаем толбко с затратами
         regular_events = regular_events[regular_events['amount'] < 0]
 
