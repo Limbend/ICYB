@@ -78,7 +78,8 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
 
         # Обновление начальной даты
         if(r_event['adjust_date']):
-            events = transactions[get_markers_regular(transactions, regular_events.loc[i])]
+            events = transactions[get_markers_regular(
+                transactions, regular_events.loc[i])]
             if len(events) > 0:
                 r_event['start_date'] = events.iloc[-1]['date'] + d_date
 
@@ -173,7 +174,8 @@ def save_new_transactions(full_transactions, db_engine, user_id):
         raise Exception(
             f'Events added retroactively were detected. Such a database update has not yet been implemented. The change has not been entered into the database!')
 
-    db_engine.add_transactions(full_transactions[full_transactions['is_new']], user_id=user_id)
+    db_engine.add_transactions(
+        full_transactions[full_transactions['is_new']], user_id=user_id)
     return (full_transactions['is_new'].sum(), 0)
 
 
@@ -233,7 +235,7 @@ def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     cleared_df = data.copy()
     cleared_df = drop_paired(cleared_df, 'amount')
 
-    # Выделяет только расходы
+    # Выделяет только транзакции
     markers = cleared_df['amount'] < 0
 
     for i in regular_list.index:
@@ -269,13 +271,24 @@ def predict_regular_events(regular_list, transactions, end_date):
     return predicted_regular.set_index('date')
 
 
-def get_full_transactions(predicted_regular, clear_transactions, balance, sbs_model, end_date):
+def combinate_events(predicted_regular, onetime_transactions):
+    return pd.concat([
+        predicted_regular[['description', 'amount']],
+        onetime_transactions[['description', 'amount']],
+    ])
+
+
+def get_full_transactions(predicted_regular, onetime_transactions, clear_transactions, balance, sbs_model, end_date):
+    print(onetime_transactions)
+
     full_transactions = pd.concat([
         predicted_regular[['amount']],
+        onetime_transactions[['amount']],
         sbs_model.predict(clear_transactions, end_date).to_frame()
     ]).resample('1D').sum()
 
-    full_transactions['balance'] = get_balance_future(balance, full_transactions['amount'])
+    full_transactions['balance'] = get_balance_future(
+        balance, full_transactions['amount'])
 
     return full_transactions
 

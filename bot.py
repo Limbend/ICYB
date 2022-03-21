@@ -47,7 +47,7 @@ def monthly_forecast(update: Update, context: CallbackContext) -> None:
         user_id, date.today() + relativedelta(months=1))
     update.message.reply_photo(photo=report_obj['transactions'], quote=True)
     # update.message.reply_photo(photo=report_obj['regular'], quote=False)
-    update.message.reply_text(text=report_obj['regular'], quote=False)
+    update.message.reply_text(text=report_obj['events'], quote=False)
 
 
 def refit(update: Update, context: CallbackContext) -> None:

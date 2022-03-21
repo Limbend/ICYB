@@ -36,6 +36,16 @@ class DB_Engine:
     def download_regular(self, user_id, table='regular'):
         return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
 
+    def download_onetime(self, user_id, table='onetime'):
+        data = pd.read_sql(
+            f'SELECT date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
+        if data.empty:
+            data = pd.DataFrame([], columns=['date', 'description', 'amount'])
+        else:
+            data['date'] = pd.to_datetime(data['date'])
+        data = data.set_index('date')
+        return data
+
     def download_transactions(self, user_id, table='transactions'):
         return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date', self.connector)
 

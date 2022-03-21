@@ -9,10 +9,11 @@ class User:
 
     Attributes:
         id: id пользователя.
-        transactions: список расходов.
-        sbs_model: список моделей, под каждую фичу, для прогноза расходов для этого пользователя.
-        regular_list: список регулярных расходов.
-        predicted_regular: рассчитанные регулярные расходы до указанной даты.
+        transactions: список транзакций.
+        sbs_model: список моделей, под каждую фичу, для прогноза транзакций для этого пользователя.
+        regular_list: список регулярных транзакций.
+        onetime_transactions: cписок разовых транзакций. 
+        predicted_regular: рассчитанные регулярные транзакции до указанной даты.
     '''
 
     def __init__(self, id, db_engine):
@@ -27,9 +28,10 @@ class User:
         self.transactions = db_engine.download_transactions(self.id)
         self.sbs_model = db_engine.download_last_model(self.id)
         self.regular_list = db_engine.download_regular(self.id)
+        self.onetime_transactions = db_engine.download_onetime(self.id)
 
     def load_from_file(self, db_engine, file_full_name, new_balance):
-        '''Загружает, обрабатывает и сохраняет расходы из файла. Соединяет новую информацию из файла с расходами сохраненными в базу до этого
+        '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
 
         Args:
             db_engine: объект для работы с базой данных.
@@ -37,43 +39,52 @@ class User:
             new_balance: текущий баланс пользователя, после последней операции в файле.
 
         Returns:
-            Датафрейм всех расходов с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
+            Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-        self.transactions = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
+        self.transactions = dl.tinkoff_file_parse(
+            file_full_name, db_engine, self.id)
         self.transactions['balance'] = ee.get_balance_past(
             new_balance, self.transactions['amount'])
-        self.transactions = ee.get_all_transactions(self.transactions, db_engine, self.id)
+        self.transactions = ee.get_all_transactions(
+            self.transactions, db_engine, self.id)
         ee.save_new_transactions(self.transactions, db_engine, self.id)
         return self.transactions
 
-    def predict_regular(self, end_date):
-        '''Прогнозирует регулярные расходы.
+    def predict_events(self, end_date):
+        '''Прогнозирует регулярные и одноразовые транзакции.
 
         Args:
             end_date: дата до которой строить прогноз.
 
         Returns:
-            Датафрейм регулярных расходов с колонками ['amount', 'category', 'description', 'balance']
+            Датафрейм регулярных транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
         self.predicted_regular = ee.predict_regular_events(
             self.regular_list, self.transactions, end_date)
-        return self.predicted_regular
+
+
+        # temp = ee.combinate_events(self.predicted_regular, self.onetime_transactions)
+        # print(temp)
+        # print(self.predicted_regular)
+        # print(self.onetime_transactions)
+        return ee.combinate_events(self.predicted_regular, self.onetime_transactions)
 
     def predict_full(self, end_date):
-        '''Прогнозирует расходы. Регулярные и предсказанные расходы складываются.
+        '''Прогнозирует транзакции. Регулярные и предсказанные транзакции складываются.
 
         Args:
             end_date: дата до которой строить прогноз.
 
         Returns:
-            Датафрейм расходов с колонками ['amount', 'balance']
+            Датафрейм транзакций с колонками ['amount', 'balance']
         '''
         data = ee.preprocessing_for_ml(
             self.transactions, self.regular_list, self.sbs_model)
 
         return ee.get_full_transactions(
             self.predicted_regular,
+            self.onetime_transactions,
             data,
             self.transactions['balance'].iloc[-1],
             self.sbs_model,
@@ -134,7 +145,7 @@ class UserManager:
         return new_u
 
     def load_from_file(self, user_id, file_full_name, new_balance):
-        '''Загружает, обрабатывает и сохраняет расходы из файла. Соединяет новую информацию из файла с расходами сохраненными в базу до этого
+        '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
 
         Args:
             user_id: id пользователя.
@@ -142,33 +153,33 @@ class UserManager:
             new_balance: текущий баланс пользователя, после последней операции в файле.
 
         Returns:
-            Датафрейм всех расходов с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
+            Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
         return self.get_user(user_id).load_from_file(self.db_engine, file_full_name, new_balance)
 
-    def predict_regular(self, user_id, end_date):
-        '''Прогнозирует регулярные расходы для пользователя.
+    def predict_events(self, user_id, end_date):
+        '''Прогнозирует регулярные и одноразовые транзакции для пользователя.
 
         Args:
             user_id: id пользователя.
             end_date: дата до которой строить прогноз.
 
         Returns:
-            Датафрейм регулярных расходов с колонками ['amount', 'category', 'description', 'balance']
+            Датафрейм транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
         user = self.get_user(user_id)
-        return user.predict_regular(end_date)
+        return user.predict_events(end_date)
 
     def predict_full(self, user_id, end_date):
-        '''Прогнозирует расходы для пользователя. Регулярные и предсказанные расходы складываются.
+        '''Прогнозирует транзакции для пользователя. Регулярные и предсказанные транзакции складываются.
 
         Args:
             user_id: id пользователя.
             end_date: дата до которой строить прогноз.
 
         Returns:
-            Датафрейм расходов с колонками ['amount', 'balance']
+            Датафрейм транзакций с колонками ['amount', 'balance']
         '''
         user = self.get_user(user_id)
 
@@ -191,7 +202,7 @@ class UserManager:
         return user.fit_new_model(self.db_engine)
 
     def get_report_obj(self, user_id, end_date):
-        '''Прогнозирует расходы пользователя, строит графики.
+        '''Прогнозирует транзакции пользователя, строит графики.
 
         Args:
             user_id: id пользователя.
@@ -200,10 +211,12 @@ class UserManager:
         Returns:
             Словарь с изображениями в двоичном формате.
         '''
-        regular_events = self.predict_regular(user_id, end_date)
+        events = self.predict_events(user_id, end_date)[
+            ['amount', 'description']]
+
         full_transactions = self.predict_full(user_id, end_date)
 
         return {
             'transactions': Visual.transactions_plot(full_transactions),
-            'regular': Visual.df_to_text(regular_events[['amount', 'description']])
+            'events': Visual.df_to_text(events)
         }
