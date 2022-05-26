@@ -74,3 +74,13 @@ class DB_Engine:
             'user_id',
             'dump'
         ]).to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
+
+    def delete_transactions(self, user_id, start_date, end_date='end', table='transactions'):
+        if end_date == 'end':
+            time = f"date > '{start_date}'"
+        else:
+            time = f"date BETWEEN '{start_date}' AND '{end_date}'"
+
+        sql = f"UPDATE {self.schema}.{table} SET is_del = true WHERE user_id = {user_id} AND {time}"
+        result = self.connector.engine.execute(sql)
+        print(result)

@@ -42,13 +42,17 @@ class User:
             Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-        self.transactions = dl.tinkoff_file_parse(
-            file_full_name, db_engine, self.id)
-        self.transactions['balance'] = ee.get_balance_past(
-            new_balance, self.transactions['amount'])
-        self.transactions = ee.get_all_transactions(
-            self.transactions, db_engine, self.id)
-        ee.save_new_transactions(self.transactions, db_engine, self.id)
+        # self.transactions = dl.tinkoff_file_parse(
+        #     file_full_name, db_engine, self.id)
+        # self.transactions['balance'] = ee.get_balance_past(
+        #     new_balance, self.transactions['amount'])
+        # self.transactions = ee.get_all_transactions(
+        #     self.transactions, db_engine, self.id)
+        # ee.save_new_transactions(self.transactions, db_engine, self.id)
+        self.transactions = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
+        self.transactions = ee.add_and_merge_transactions(self.transactions, new_balance, db_engine, self.id)
+
+
         return self.transactions
 
     def predict_events(self, end_date):

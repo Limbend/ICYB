@@ -52,8 +52,10 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
     result = []
     j_limit = 1000
 
-    new_regular_events['start_date'] = pd.to_datetime(new_regular_events['start_date'])
-    new_regular_events['end_date'] = pd.to_datetime(new_regular_events['end_date'])
+    new_regular_events['start_date'] = pd.to_datetime(
+        new_regular_events['start_date'])
+    new_regular_events['end_date'] = pd.to_datetime(
+        new_regular_events['end_date'])
 
     for i, r_event in new_regular_events.iterrows():
         d_date = relativedelta(
@@ -156,27 +158,39 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
     return df_events
 
 
-def get_all_transactions(new_transactions, db_engine, user_id):
+def add_and_merge_transactions(new_transactions, new_balance, db_engine, user_id):
     old_transactions = db_engine.download_transactions(user_id)
     old_transactions['is_new'] = False
     new_transactions = new_transactions.copy()
     new_transactions['is_new'] = True
 
-    return pd.concat([old_transactions, new_transactions]).drop_duplicates(subset=['date', 'amount']).sort_values('date')
+    full_transactions = pd.concat([old_transactions, new_transactions]).drop_duplicates(
+        subset=['date', 'amount']).sort_values('date')
 
-
-def save_new_transactions(full_transactions, db_engine, user_id):
+    new_start_date = full_transactions[full_transactions['is_new']
+                                       ].iloc[0]['date']
     if (len(full_transactions[~full_transactions['is_new']]) > 0) and \
         (len(full_transactions[full_transactions['is_new']]) > 0) and \
-            (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > full_transactions[full_transactions['is_new']].iloc[0]['date']):
+            (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > new_start_date):
 
-        # todo позже добавить обработку этого события !!!
-        raise Exception(
-            f'Events added retroactively were detected. Such a database update has not yet been implemented. The change has not been entered into the database!')
+        print(f"Delete transactions after {new_start_date} in DB")
+        db_engine.delete_transactions(
+            user_id, full_transactions[full_transactions['is_new']].iloc[0]['date'])
 
+        # Прошлый, не рабочий вариант обновления
+        # full_transactions = full_transactions[~(
+        #     (~full_transactions['is_new']) & (full_transactions['date'] > new_start_date))]
+        full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
+        subset=['date', 'amount']).sort_values('date')
+
+    full_transactions['balance'] = get_balance_past(
+        new_balance, full_transactions['amount'])
     db_engine.add_transactions(
         full_transactions[full_transactions['is_new']], user_id=user_id)
-    return (full_transactions['is_new'].sum(), 0)
+
+    print(full_transactions[~full_transactions['is_new']].iloc[-1])
+
+    return full_transactions
 
 
 def drop_paired(data: pd.DataFrame, by: str):
