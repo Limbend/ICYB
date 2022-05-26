@@ -17,8 +17,8 @@ def transactions_plot(transactions):
     ax.hlines(transactions['balance'].min(), transactions.index[0],
               transactions.index[-1], color='r', linewidth=3, linestyle='--')
     ax.text(
-        transactions[transactions['balance'] == transactions['balance'].min()].index,
-        transactions['balance'].min()*.8,
+        transactions.head(1).index,
+        transactions['balance'].min()*.7,
         f"Минимальный баланс: {transactions['balance'].min():.2f}   ({transactions[transactions['balance'] == transactions['balance'].min()].index[0]:%d.%m.%Y})",
         color='w',
         backgroundcolor='b'

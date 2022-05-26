@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import date
+from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 import ML as ml
 
@@ -52,6 +52,9 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
     result = []
     j_limit = 1000
 
+    new_regular_events['start_date'] = pd.to_datetime(new_regular_events['start_date'])
+    new_regular_events['end_date'] = pd.to_datetime(new_regular_events['end_date'])
+
     for i, r_event in new_regular_events.iterrows():
         d_date = relativedelta(
             years=int(r_event['d_years']),
@@ -59,7 +62,7 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
             days=int(r_event['d_days'])
         )
 
-        if r_event['end_date'] is None:
+        if pd.isna(r_event['end_date']):
             r_event['end_date'] = g_end_date
         else:
             r_event['end_date'] = min(r_event['end_date'], g_end_date)
@@ -106,7 +109,6 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
                         r_event['amount'],
                         f'overdue[{i}-{i_overdue}]',
                         r_event['description'],
-                        np.nan,
                         True
                     ))
             else:
@@ -123,7 +125,6 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
                             r_event['amount'],
                             f'overdue[{i}-{i_overdue}]',
                             r_event['description'],
-                            np.nan,
                             True
                         ))
 
@@ -140,7 +141,6 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
                 r_event['amount'],
                 f'regular[{i}]',
                 r_event['description'],
-                np.nan,
                 False
             ))
 
@@ -151,7 +151,7 @@ def get_regular_events(regular_events, transactions, g_start_date, g_end_date, w
             date = new_start + d_date * j
 
     df_events = pd.DataFrame(result, columns=[
-                             'date', 'amount', 'category', 'description', 'balance', 'is_overdue']).sort_values('date').reset_index(drop=True)
+                             'date', 'amount', 'category', 'description', 'is_overdue']).sort_values('date').reset_index(drop=True)
     df_events['date'] = pd.to_datetime(df_events['date'])
     return df_events
 
@@ -261,29 +261,22 @@ def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     return cleared_df.resample('1D').sum()
 
 
-def predict_regular_events(regular_list, transactions, end_date):
-    balance = transactions['balance'].iloc[-1]
+def predict_events(regular_list, onetime_transactions, transactions, end_date):
+    start_date = datetime.today()
+
     predicted_regular = get_regular_events(
-        regular_list, transactions, date.today(), end_date)
+        regular_list, transactions, start_date, end_date)
 
-    predicted_regular['balance'] = get_balance_future(
-        balance, predicted_regular['amount'])
-    return predicted_regular.set_index('date')
-
-
-def combinate_events(predicted_regular, onetime_transactions):
     return pd.concat([
-        predicted_regular[['description', 'amount']],
-        onetime_transactions[['description', 'amount']],
-    ])
+        predicted_regular,
+        onetime_transactions[(onetime_transactions['date'] >= start_date) & (
+            onetime_transactions['date'] <= end_date)],
+    ]).sort_values('date')
 
 
-def get_full_transactions(predicted_regular, onetime_transactions, clear_transactions, balance, sbs_model, end_date):
-    print(onetime_transactions)
-
+def get_full_transactions(predicted_events, clear_transactions, balance, sbs_model, end_date):
     full_transactions = pd.concat([
-        predicted_regular[['amount']],
-        onetime_transactions[['amount']],
+        predicted_events.set_index('date')[['amount']],
         sbs_model.predict(clear_transactions, end_date).to_frame()
     ]).resample('1D').sum()
 

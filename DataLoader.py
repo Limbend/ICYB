@@ -15,8 +15,7 @@ def tinkoff_file_parse(path, db_engine, user_id):
     ]]
 
     df_for_sql = df.reindex(index=df.index[::-1]).reset_index(drop=True)
-    df_for_sql.columns = ['date', 'amount',
-                          'category', 'description']  # , 'balance']
+    df_for_sql.columns = ['date', 'amount', 'category', 'description']
 
     for k, v in db_engine.download_c_rules(user_id=user_id):
         df_for_sql.loc[df_for_sql['description'] == k, 'category'] = v
@@ -43,7 +42,6 @@ class DB_Engine:
             data = pd.DataFrame([], columns=['date', 'description', 'amount'])
         else:
             data['date'] = pd.to_datetime(data['date'])
-        data = data.set_index('date')
         return data
 
     def download_transactions(self, user_id, table='transactions'):

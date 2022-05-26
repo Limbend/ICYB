@@ -13,7 +13,7 @@ class User:
         sbs_model: список моделей, под каждую фичу, для прогноза транзакций для этого пользователя.
         regular_list: список регулярных транзакций.
         onetime_transactions: cписок разовых транзакций. 
-        predicted_regular: рассчитанные регулярные транзакции до указанной даты.
+        predicted_events: рассчитанные транзакции до указанной даты.
     '''
 
     def __init__(self, id, db_engine):
@@ -60,15 +60,10 @@ class User:
         Returns:
             Датафрейм регулярных транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
-        self.predicted_regular = ee.predict_regular_events(
-            self.regular_list, self.transactions, end_date)
+        self.predicted_events = ee.predict_events(
+            self.regular_list, self.onetime_transactions, self.transactions, end_date)
 
-
-        # temp = ee.combinate_events(self.predicted_regular, self.onetime_transactions)
-        # print(temp)
-        # print(self.predicted_regular)
-        # print(self.onetime_transactions)
-        return ee.combinate_events(self.predicted_regular, self.onetime_transactions)
+        return self.predicted_events
 
     def predict_full(self, end_date):
         '''Прогнозирует транзакции. Регулярные и предсказанные транзакции складываются.
@@ -83,8 +78,7 @@ class User:
             self.transactions, self.regular_list, self.sbs_model)
 
         return ee.get_full_transactions(
-            self.predicted_regular,
-            self.onetime_transactions,
+            self.predicted_events,
             data,
             self.transactions['balance'].iloc[-1],
             self.sbs_model,
@@ -211,7 +205,7 @@ class UserManager:
         Returns:
             Словарь с изображениями в двоичном формате.
         '''
-        events = self.predict_events(user_id, end_date)[
+        events = self.predict_events(user_id, end_date).set_index('date')[
             ['amount', 'description']]
 
         full_transactions = self.predict_full(user_id, end_date)
