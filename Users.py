@@ -49,9 +49,10 @@ class User:
         # self.transactions = ee.get_all_transactions(
         #     self.transactions, db_engine, self.id)
         # ee.save_new_transactions(self.transactions, db_engine, self.id)
-        self.transactions = dl.tinkoff_file_parse(file_full_name, db_engine, self.id)
-        self.transactions = ee.add_and_merge_transactions(self.transactions, new_balance, db_engine, self.id)
-
+        self.transactions = dl.tinkoff_file_parse(
+            file_full_name, db_engine, self.id)
+        self.transactions = ee.add_and_merge_transactions(
+            self.transactions, new_balance, db_engine, self.id)
 
         return self.transactions
 
@@ -112,6 +113,18 @@ class User:
 
         return {'time': time_passed, 'event_count': len(self.transactions), 'ml_event_count': len(data)}
 
+    def add_onetime(self, db_engine, date, amount, description):
+        '''Добавляет однократное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            date: дата транзакции.
+            amount: сумма транзакции.
+            description: описание транзакции.
+        '''
+        self.onetime_transactions = ee.add_onetime(
+            db_engine, self.onetime_transactions, self.id, date, amount, description)
+
 
 class UserManager:
     '''Класс для управления пользователями.
@@ -166,8 +179,7 @@ class UserManager:
         Returns:
             Датафрейм транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
-        user = self.get_user(user_id)
-        return user.predict_events(end_date)
+        return self.get_user(user_id).predict_events(end_date)
 
     def predict_full(self, user_id, end_date):
         '''Прогнозирует транзакции для пользователя. Регулярные и предсказанные транзакции складываются.
@@ -179,9 +191,7 @@ class UserManager:
         Returns:
             Датафрейм транзакций с колонками ['amount', 'balance']
         '''
-        user = self.get_user(user_id)
-
-        return user.predict_full(end_date)
+        return self.get_user(user_id).predict_full(end_date)
 
     def fit_new_model(self, user_id):
         '''Создает, учит и сохраняет модели для пользователя.
@@ -195,9 +205,7 @@ class UserManager:
             event_count: всего событий в базе.
             ml_event_count: события участвующие в обучении модели.
         '''
-        user = self.get_user(user_id)
-
-        return user.fit_new_model(self.db_engine)
+        return self.get_user(user_id).fit_new_model(self.db_engine)
 
     def get_report_obj(self, user_id, end_date):
         '''Прогнозирует транзакции пользователя, строит графики.
@@ -216,5 +224,27 @@ class UserManager:
 
         return {
             'transactions': Visual.transactions_plot(full_transactions),
-            'events': Visual.df_to_text(events)
+            'events': Visual.show_events(events)
         }
+
+    def add_onetime(self, user_id, date, amount, description):
+        '''Добавляет однократное событие.
+
+        Args:
+            user_id: id пользователя.
+            date: дата транзакции.
+            amount: сумма транзакции.
+            description: описание транзакции.
+        '''
+        self.get_user(user_id).add_onetime(
+            self.db_engine, date, amount, description)
+
+    def show_onetime(self, user_id, only_relevant=True):
+        '''Добавляет однократное событие.
+
+        Args:
+            user_id: id пользователя.
+            only_relevant: если True, вернет только будущие собития.
+        '''
+        user = self.get_user(user_id)
+        return Visual.show_onetime(user.onetime_transactions, only_relevant)

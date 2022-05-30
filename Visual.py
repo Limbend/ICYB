@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 import seaborn as sns
+from datetime import date, datetime
 # import dataframe_image as dfi # dataframe-image==0.1.1
 import io
 
@@ -38,8 +39,8 @@ def transactions_plot(transactions):
 #     dfi.export(dataframe, image_full_name)
 #     return open(image_full_name, 'rb')
 
-def df_to_text(dataframe):
-    result = dataframe.copy()
+def show_events(events):
+    result = events.copy()
     result.index = result.index.strftime('%d.%m.%Y')
 
     result = result.to_string(formatters={
@@ -48,4 +49,17 @@ def df_to_text(dataframe):
         # 'balance': "{:.2f}".format,
     })
 
-    return 'Регулярки\n        ' + result
+    return 'Регулярные транзакции\n        ' + result
+
+def show_onetime(onetime, only_relevant):
+    result = onetime.copy()
+    if only_relevant:
+        result = result[result['date']>=datetime.today()]
+    result = result.set_index('date')
+    result.index = result.index.strftime('%d.%m.%Y')
+
+    result = result.to_string(formatters={
+        'amount': "{:.2f}".format,
+    })
+
+    return 'Разовые транзакции\n        ' + result

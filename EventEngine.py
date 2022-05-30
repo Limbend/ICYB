@@ -181,7 +181,7 @@ def add_and_merge_transactions(new_transactions, new_balance, db_engine, user_id
         # full_transactions = full_transactions[~(
         #     (~full_transactions['is_new']) & (full_transactions['date'] > new_start_date))]
         full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
-        subset=['date', 'amount']).sort_values('date')
+            subset=['date', 'amount']).sort_values('date')
 
     full_transactions['balance'] = get_balance_past(
         new_balance, full_transactions['amount'])
@@ -306,3 +306,24 @@ def fit_model(data, sbs_model=None):
 
     sbs_model.fit(data)
     return sbs_model
+
+
+def add_onetime(db_engine, onetime_transactions, user_id, date, amount, description):
+    '''Добавляет однократное событие.
+
+    Args:
+        db_engine: объект для работы с базой данных.
+        onetime_transactions: cписок разовых транзакций.
+        user_id: id пользователя.
+        date: дата транзакции.
+        amount: сумма транзакции.
+        description: описание транзакции.
+    Returns:
+    !!!
+    '''
+    new_row = pd.DataFrame([[user_id, description, amount, date]], columns=[
+                           'user_id', 'description', 'amount', 'date'])
+    onetime_transactions = pd.concat([onetime_transactions, new_row[['description', 'amount', 'date']]], axis=0)
+    db_engine.add_onetime(new_row)
+
+    return onetime_transactions

@@ -84,3 +84,7 @@ class DB_Engine:
         sql = f"UPDATE {self.schema}.{table} SET is_del = true WHERE user_id = {user_id} AND {time}"
         result = self.connector.engine.execute(sql)
         print(result)
+
+    def add_onetime(self, data, table='onetime'):
+        data.to_sql(table, self.connector, schema=self.schema,
+                    if_exists='append', index=False)
