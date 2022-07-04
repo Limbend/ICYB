@@ -177,9 +177,6 @@ def add_and_merge_transactions(new_transactions, new_balance, db_engine, user_id
         db_engine.delete_transactions(
             user_id, full_transactions[full_transactions['is_new']].iloc[0]['date'])
 
-        # Прошлый, не рабочий вариант обновления
-        # full_transactions = full_transactions[~(
-        #     (~full_transactions['is_new']) & (full_transactions['date'] > new_start_date))]
         full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
             subset=['date', 'amount']).sort_values('date')
 
@@ -188,9 +185,7 @@ def add_and_merge_transactions(new_transactions, new_balance, db_engine, user_id
     db_engine.add_transactions(
         full_transactions[full_transactions['is_new']], user_id=user_id)
 
-    print(full_transactions[~full_transactions['is_new']].iloc[-1])
-
-    return full_transactions
+    return full_transactions.reset_index(drop=True)
 
 
 def drop_paired(data: pd.DataFrame, by: str):
@@ -275,8 +270,7 @@ def preprocessing_for_ml(data, regular_list, sbs_model, q=0.16):
     return cleared_df.resample('1D').sum()
 
 
-def predict_events(regular_list, onetime_transactions, transactions, end_date):
-    start_date = datetime.today()
+def predict_events(regular_list, onetime_transactions, transactions, start_date, end_date):
 
     predicted_regular = get_regular_events(
         regular_list, transactions, start_date, end_date)
@@ -288,16 +282,62 @@ def predict_events(regular_list, onetime_transactions, transactions, end_date):
     ]).sort_values('date')
 
 
-def get_full_transactions(predicted_events, clear_transactions, balance, sbs_model, end_date):
-    full_transactions = pd.concat([
+def predict_transactions(clear_transactions, sbs_model, end_date):
+    return sbs_model.predict(clear_transactions, end_date).to_frame()
+
+
+def merge_of_predicts(predicted_events, predicted_transactions, start_balance):
+    merged_transactions = pd.concat([
         predicted_events.set_index('date')[['amount']],
-        sbs_model.predict(clear_transactions, end_date).to_frame()
+        predicted_transactions
     ]).resample('1D').sum()
 
-    full_transactions['balance'] = get_balance_future(
-        balance, full_transactions['amount'])
+    merged_transactions['balance'] = get_balance_future(
+        start_balance, merged_transactions['amount'])
 
-    return full_transactions
+    return merged_transactions
+
+
+
+
+def get_comparison_data(regular_list, onetime_transactions, transactions, sbs_model):
+    is_new = transactions[transactions['is_new']]
+    not_new = transactions[~transactions['is_new']]
+
+    start_date = pd.to_datetime(not_new.tail(1)['date'].values[0])
+    end_date = pd.to_datetime(is_new.tail(1)['date'].values[0])
+
+    predicted_events = predict_events(
+        regular_list, onetime_transactions, transactions, start_date, end_date)
+
+    data = preprocessing_for_ml(not_new, regular_list, sbs_model)
+
+    predicted_transactions = predict_transactions(data, sbs_model, end_date)
+    merged_transactions = merge_of_predicts(predicted_events, predicted_transactions, not_new['balance'].iloc[-1])
+
+    merged_transactions = merged_transactions[['balance']]
+    merged_transactions.columns = ['predicted_b']
+
+    real_full_transactions = is_new.set_index(
+        'date')[['balance']].resample('1D').last()
+    real_full_transactions.columns = ['reab_b']
+
+    previous_week = not_new.set_index(
+        'date')[['balance']].resample('1D').last().tail(7)
+    previous_week.columns = ['reab_b']
+    previous_week['predicted_b'] = previous_week['reab_b']
+
+    comparison = pd.concat([
+        previous_week,
+        pd.concat([
+            real_full_transactions,
+            merged_transactions
+        ],axis=1)
+    ],axis=0)
+
+    comparison = comparison.fillna(method='ffill')
+
+    return comparison
 
 
 def fit_model(data, sbs_model=None):
@@ -319,11 +359,12 @@ def add_onetime(db_engine, onetime_transactions, user_id, date, amount, descript
         amount: сумма транзакции.
         description: описание транзакции.
     Returns:
-    !!!
+        Итоговый список однократных событий
     '''
     new_row = pd.DataFrame([[user_id, description, amount, date]], columns=[
                            'user_id', 'description', 'amount', 'date'])
-    onetime_transactions = pd.concat([onetime_transactions, new_row[['description', 'amount', 'date']]], axis=0)
+    onetime_transactions = pd.concat(
+        [onetime_transactions, new_row[['description', 'amount', 'date']]], axis=0)
     db_engine.add_onetime(new_row)
 
     return onetime_transactions

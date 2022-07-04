@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine
 import pickle
+import re
+from datetime import date, datetime
 
 
 def tinkoff_file_parse(path, db_engine, user_id):
@@ -21,6 +23,42 @@ def tinkoff_file_parse(path, db_engine, user_id):
         df_for_sql.loc[df_for_sql['description'] == k, 'category'] = v
 
     return df_for_sql
+
+
+def amount_parser(string):
+    sep = (" ","`","'")
+    result = re.search("-?(\d{1,3}[ `'])*\d+([\.\,]\d+)?", string).group(0)
+    result = result.replace(',','.')
+    for s in sep:
+        result = result.replace(s,'')
+        
+    return float(result)
+
+
+def ru_datetime_parser(string):
+    l = len(string)
+    dotC = string.count('.')
+    сolonC = string.count(':')
+    
+    if 4 <= l <= 5 and dotC == 1:
+        result = datetime.strptime(string, '%d.%m').replace(year=datetime.today().year)
+    elif 6 <= l <= 8 and dotC == 2:
+        result = datetime.strptime(string, '%d.%m.%y')
+    elif 8 <= l <= 10 and dotC == 2:
+        result = datetime.strptime(string, '%d.%m.%Y')
+        
+    elif 7 <= l <= 11 and dotC == 1 and сolonC == 1:
+        result = datetime.strptime(string, '%d.%m %H:%M').replace(year=datetime.today().year)
+    elif 10 <= l <= 14 and dotC == 2 and сolonC == 1:
+        result = datetime.strptime(string, '%d.%m.%y %H:%M')
+    elif l == 16 and dotC == 2 and сolonC == 1:
+        result = datetime.strptime(string, '%d.%m.%Y %H:%M')
+        
+        
+    else:
+        result = datetime(string)
+    
+    return result
 
 
 class DB_Engine:

@@ -1,6 +1,7 @@
 import DataLoader as dl
 import EventEngine as ee
 import time
+from datetime import date, datetime
 import Visual
 
 
@@ -13,7 +14,8 @@ class User:
         sbs_model: список моделей, под каждую фичу, для прогноза транзакций для этого пользователя.
         regular_list: список регулярных транзакций.
         onetime_transactions: cписок разовых транзакций. 
-        predicted_events: рассчитанные транзакции до указанной даты.
+        predicted_events: рассчитанные регулярные и разовые транзакции до указанной даты.
+        predicted_transactions: прогноз транзакций до указанной даты.
     '''
 
     def __init__(self, id, db_engine):
@@ -56,19 +58,29 @@ class User:
 
         return self.transactions
 
-    def predict_events(self, end_date):
+    def predict_events(self, start_date, end_date):
         '''Прогнозирует регулярные и одноразовые транзакции.
 
         Args:
+            start_date: дата c которой строить прогноз.
             end_date: дата до которой строить прогноз.
 
         Returns:
             Датафрейм регулярных транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
         self.predicted_events = ee.predict_events(
-            self.regular_list, self.onetime_transactions, self.transactions, end_date)
+            self.regular_list, self.onetime_transactions, self.transactions, start_date, end_date)
 
         return self.predicted_events
+
+    def get_comparison_data(self):
+        '''Создаст датафрейм прогнозируемого и фактического баланса, полученного из добавленных в базу транзакций.
+        Необходим для сравнения прогнозов с фактическими расходами и доходами.
+
+        Returns:
+            Датафрейм с колонками ['reab_b', 'predicted_b']
+        '''
+        return ee.get_comparison_data(self.regular_list, self.onetime_transactions, self.transactions, self.sbs_model)
 
     def predict_full(self, end_date):
         '''Прогнозирует транзакции. Регулярные и предсказанные транзакции складываются.
@@ -81,14 +93,10 @@ class User:
         '''
         data = ee.preprocessing_for_ml(
             self.transactions, self.regular_list, self.sbs_model)
+        self.predicted_transactions = ee.predict_transactions(
+            data, self.sbs_model, end_date)
 
-        return ee.get_full_transactions(
-            self.predicted_events,
-            data,
-            self.transactions['balance'].iloc[-1],
-            self.sbs_model,
-            end_date
-        )
+        return ee.merge_of_predicts(self.predicted_events, self.predicted_transactions, self.transactions['balance'].iloc[-1])
 
     def fit_new_model(self, db_engine):
         '''Создает, учит и сохраняет модель для пользователя.
@@ -164,10 +172,21 @@ class UserManager:
             new_balance: текущий баланс пользователя, после последней операции в файле.
 
         Returns:
-            Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
-            где is_new == True если эта строка из файла.
+            {
+                'plot': Сравнительный график прогноза с фактическим изменением баланса.
+                'message': Ответное сообщение об успешном добавлении данных.
+            }
         '''
-        return self.get_user(user_id).load_from_file(self.db_engine, file_full_name, new_balance)
+        user = self.get_user(user_id)
+
+        transactions = user.load_from_file(
+            self.db_engine, file_full_name, dl.amount_parser(new_balance))
+        comparison_data = user.get_comparison_data()
+
+        return {
+            'plot': Visual.comparison_plot(comparison_data),
+            'message': Visual.successful_adding_transactions(transactions)
+        }
 
     def predict_events(self, user_id, end_date):
         '''Прогнозирует регулярные и одноразовые транзакции для пользователя.
@@ -179,7 +198,7 @@ class UserManager:
         Returns:
             Датафрейм транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
-        return self.get_user(user_id).predict_events(end_date)
+        return self.get_user(user_id).predict_events(datetime.today(), end_date)
 
     def predict_full(self, user_id, end_date):
         '''Прогнозирует транзакции для пользователя. Регулярные и предсказанные транзакции складываются.
@@ -207,7 +226,7 @@ class UserManager:
         '''
         return self.get_user(user_id).fit_new_model(self.db_engine)
 
-    def get_report_obj(self, user_id, end_date):
+    def report_events_and_transactions(self, user_id, end_date):
         '''Прогнозирует транзакции пользователя, строит графики.
 
         Args:
@@ -215,7 +234,10 @@ class UserManager:
             end_date: дата до которой строить прогноз.
 
         Returns:
-            Словарь с изображениями в двоичном формате.
+            {
+                'plot': График прогноза баланса.
+                'message': Список регулярных транзакций и средние расходы в день.
+            }
         '''
         events = self.predict_events(user_id, end_date).set_index('date')[
             ['amount', 'description']]
@@ -223,8 +245,8 @@ class UserManager:
         full_transactions = self.predict_full(user_id, end_date)
 
         return {
-            'transactions': Visual.transactions_plot(full_transactions),
-            'events': Visual.show_events(events)
+            'plot': Visual.transactions_plot(full_transactions),
+            'message': Visual.predict_info(events, self.get_user(user_id).predicted_transactions)
         }
 
     def add_onetime(self, user_id, date, amount, description):
@@ -236,8 +258,8 @@ class UserManager:
             amount: сумма транзакции.
             description: описание транзакции.
         '''
-        self.get_user(user_id).add_onetime(
-            self.db_engine, date, amount, description)
+        self.get_user(user_id).add_onetime(self.db_engine, dl.ru_datetime_parser(
+            date), dl.amount_parser(amount), description)
 
     def show_onetime(self, user_id, only_relevant=True):
         '''Добавляет однократное событие.

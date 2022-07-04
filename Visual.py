@@ -34,6 +34,36 @@ def transactions_plot(transactions):
     return plot_b
 
 
+def comparison_plot(comparison):
+    data = comparison.copy()
+    data.columns = ['Реальный баланс', 'Прогноз баланса']
+    formatter = DateFormatter('%d.%m.%Y')
+
+    sns.set(font_scale=1.4, style="whitegrid")
+    plt.rcParams['figure.figsize'] = (19.5, 9)
+
+    ax = sns.lineplot(data=data, linewidth=4)
+    ax.fill_between(comparison.index,
+                    comparison['reab_b'], comparison['predicted_b'],
+                    where=(comparison['reab_b'] >= comparison['predicted_b']),
+                    facecolor='green',
+                    alpha=.4)
+    ax.fill_between(comparison.index,
+                    comparison['reab_b'], comparison['predicted_b'],
+                    where=(comparison['reab_b'] < comparison['predicted_b']),
+                    facecolor='red',
+                    alpha=.4)
+
+    ax.xaxis.set_major_formatter(formatter)
+    plt.subplots_adjust(left=0.08, right=0.97, top=.98, bottom=0.1)
+
+    plot_b = io.BytesIO()
+    plt.savefig(plot_b, format='png')
+    plt.close()
+    plot_b.seek(0)
+    return plot_b
+
+
 # def df_to_image(dataframe, image_full_name):
 #     # dfi.export(dataframe, image_full_name, table_conversion='matplotlib') # не красивый вид, но не требует хром
 #     dfi.export(dataframe, image_full_name)
@@ -51,10 +81,11 @@ def show_events(events):
 
     return 'Регулярные транзакции\n        ' + result
 
+
 def show_onetime(onetime, only_relevant):
     result = onetime.copy()
     if only_relevant:
-        result = result[result['date']>=datetime.today()]
+        result = result[result['date'] >= datetime.today()]
     result = result.set_index('date')
     result.index = result.index.strftime('%d.%m.%Y')
 
@@ -63,3 +94,12 @@ def show_onetime(onetime, only_relevant):
     })
 
     return 'Разовые транзакции\n        ' + result
+
+
+def successful_adding_transactions(transactions):
+    return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРащница прогноза и фактического баланса:"
+
+
+def predict_info(events, predicted_transactions):
+    table = show_events(events)
+    return table + f"\n\n\nДополнительно к этим транзакциям, средний расход в день составляет: {predicted_transactions['amount'].mean():.2f}"

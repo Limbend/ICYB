@@ -31,23 +31,33 @@ def ping(update: Update, context: CallbackContext) -> None:
 
 
 def download_file(update: Update, context: CallbackContext) -> None:
-    balance = float(context.args[0])
+    balance = ' '.join(context.args[0:])
     user_id = update.message.from_user.id
 
     file_received = update.message.reply_to_message.document
     file_received.get_file().download(
         custom_path='./temp/' + file_received.file_name)
-    manager.load_from_file(user_id, './temp/' +
-                           file_received.file_name, balance)
+    report_obj = manager.load_from_file(user_id, './temp/' +
+                                        file_received.file_name, balance)
+
+    update.message.reply_text(text=report_obj['message'], quote=True)
+    update.message.reply_photo(photo=report_obj['plot'], quote=False)
 
 
-def monthly_forecast(update: Update, context: CallbackContext) -> None:
+def forecast(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    report_obj = manager.get_report_obj(
-        user_id, datetime.today() + relativedelta(months=1))
-    update.message.reply_photo(photo=report_obj['transactions'], quote=True)
-    # update.message.reply_photo(photo=report_obj['regular'], quote=False)
-    update.message.reply_text(text=report_obj['events'], quote=False)
+
+    if len(context.args) > 0 and context.args[0].isdigit():
+        months = int(context.args[0])
+        if months > 9 or months < 1:
+            months = 1
+    else:
+        months = 1
+
+    report_obj = manager.report_events_and_transactions(
+        user_id, datetime.today() + relativedelta(months=months))
+    update.message.reply_photo(photo=report_obj['plot'], quote=True)
+    update.message.reply_text(text=report_obj['message'], quote=False)
 
 
 def refit(update: Update, context: CallbackContext) -> None:
@@ -60,10 +70,12 @@ def refit(update: Update, context: CallbackContext) -> None:
 def onetime(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     if len(context.args) > 0 and context.args[0] == 'add':
-        manager.add_onetime(user_id, datetime.strptime(
-            context.args[1], '%Y-%m-%d'), float(context.args[2]), ' '.join(context.args[3:]))
+
+        manager.add_onetime(
+            user_id, context.args[1], context.args[2], ' '.join(context.args[3:]))
     else:
-        update.message.reply_text(text=manager.show_onetime(user_id), quote=False)
+        update.message.reply_text(
+            text=manager.show_onetime(user_id), quote=False)
 
 # def message(update: Update, context: CallbackContext) -> None:
 #     print(update.message.text)
@@ -72,7 +84,7 @@ def onetime(update: Update, context: CallbackContext) -> None:
 
 updater = Updater(settings['bot_token'])
 
-updater.dispatcher.add_handler(CommandHandler('pred', monthly_forecast))
+updater.dispatcher.add_handler(CommandHandler('pred', forecast))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
