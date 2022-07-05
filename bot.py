@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
 import json
 import logging
+import os
 
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
@@ -19,7 +20,7 @@ console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 logger = logging.getLogger(__name__)
 
-
+L_TYPE = os.getenv('ICYB_L_TYPE', 'TEST')
 with open('./settings.np.json') as f:
     settings = json.load(f)
 
@@ -82,7 +83,7 @@ def onetime(update: Update, context: CallbackContext) -> None:
 #     user_id = update.message.from_user.id
 
 
-updater = Updater(settings['bot_token'])
+updater = Updater(settings[L_TYPE+'-bot_token'])
 
 updater.dispatcher.add_handler(CommandHandler('pred', forecast))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
