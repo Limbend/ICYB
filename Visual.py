@@ -1,9 +1,20 @@
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.dates import DateFormatter
 import seaborn as sns
 from datetime import date, datetime
 # import dataframe_image as dfi # dataframe-image==0.1.1
 import io
+
+from sqlalchemy import column
+
+
+FORMATTERS = {
+    'date': lambda x: x.strftime('%d.%m.%Y'),
+    'start_date': lambda x: x.strftime('%d.%m.%Y'),
+    'end_date': lambda x: x.strftime('%d.%m.%Y') if not(pd.isna(x)) else 'NaT',
+    'amount': "{:.2f}".format,
+}
 
 
 def transactions_plot(transactions):
@@ -69,31 +80,44 @@ def comparison_plot(comparison):
 #     dfi.export(dataframe, image_full_name)
 #     return open(image_full_name, 'rb')
 
+
+def show_table(data, columns):
+    return data[columns].to_string(
+        formatters={key: FORMATTERS[key] for key in columns if key in FORMATTERS})
+
+
+def show_row(data, index, columns):
+    result = data.loc[[index], columns].copy()
+    formatters = {key: FORMATTERS[key] for key in columns if key in FORMATTERS}
+
+    result[list(formatters)] = result.apply(formatters)
+    return result.transpose().to_string()
+
+
 def show_events(events):
     result = events.copy()
-    result.index = result.index.strftime('%d.%m.%Y')
-
-    result = result.to_string(formatters={
-        # 'date': '{:%d.%m.%Y}'.format,
-        'amount': "{:.2f}".format,
-        # 'balance': "{:.2f}".format,
-    })
-
-    return 'Регулярные транзакции\n        ' + result
+    return 'Регулярные транзакции\n        ' + show_table(result, columns=list(result))
 
 
-def show_onetime(onetime, only_relevant):
+def show_regular(regular, only_relevant, columns, index=None):
+    result = regular.copy()
+    if index is None:
+        if only_relevant:
+            result = result[(result['end_date'].isna()) | (
+                result['end_date'] >= date.today())]
+        return 'Регулярные транзакции\n        ' + show_table(result, columns)
+    else:
+        return f'Регулярная транзакция\n\n        ' + show_row(result, index, columns)
+
+
+def show_onetime(onetime, only_relevant, columns, index=None):
     result = onetime.copy()
-    if only_relevant:
-        result = result[result['date'] >= datetime.today()]
-    result = result.set_index('date')
-    result.index = result.index.strftime('%d.%m.%Y')
-
-    result = result.to_string(formatters={
-        'amount': "{:.2f}".format,
-    })
-
-    return 'Разовые транзакции\n        ' + result
+    if index is None:
+        if only_relevant:
+            result = result[result['date'] >= datetime.today()]
+        return 'Разовые транзакции\n        ' + show_table(result, columns)
+    else:
+        return f'Разовая транзакция\n\n        ' + show_row(result, index, columns)
 
 
 def successful_adding_transactions(transactions):

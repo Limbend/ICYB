@@ -298,8 +298,6 @@ def merge_of_predicts(predicted_events, predicted_transactions, start_balance):
     return merged_transactions
 
 
-
-
 def get_comparison_data(regular_list, onetime_transactions, transactions, sbs_model):
     is_new = transactions[transactions['is_new']]
     not_new = transactions[~transactions['is_new']]
@@ -313,7 +311,8 @@ def get_comparison_data(regular_list, onetime_transactions, transactions, sbs_mo
     data = preprocessing_for_ml(not_new, regular_list, sbs_model)
 
     predicted_transactions = predict_transactions(data, sbs_model, end_date)
-    merged_transactions = merge_of_predicts(predicted_events, predicted_transactions, not_new['balance'].iloc[-1])
+    merged_transactions = merge_of_predicts(
+        predicted_events, predicted_transactions, not_new['balance'].iloc[-1])
 
     merged_transactions = merged_transactions[['balance']]
     merged_transactions.columns = ['predicted_b']
@@ -332,8 +331,8 @@ def get_comparison_data(regular_list, onetime_transactions, transactions, sbs_mo
         pd.concat([
             real_full_transactions,
             merged_transactions
-        ],axis=1)
-    ],axis=0)
+        ], axis=1)
+    ], axis=0)
 
     comparison = comparison.fillna(method='ffill')
 

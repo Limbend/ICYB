@@ -1,5 +1,6 @@
 import DataLoader as dl
 import EventEngine as ee
+import BotDialog as bd
 import time
 from datetime import date, datetime
 import Visual
@@ -139,12 +140,15 @@ class UserManager:
 
     Attributes:
         db_engine: объект для работы с базой данных.
-        user_list: список пользователей.
+        user_dict: словарь пользователей.
+        bot_dialog_dict: словарь BotDialog для пользовалетей.
+
     '''
 
     def __init__(self, db_settings):
         self.db_engine = dl.DB_Engine(**db_settings)
-        self.user_list = []
+        self.user_dict = {}
+        self.bot_dialog_dict = {}
 
     def get_user(self, user_id):
         '''Ищет и возвращает объект пользователя по его id 
@@ -155,13 +159,12 @@ class UserManager:
         Returns:
             Объект пользователя.
         '''
-        for u in self.user_list:
-            if u.id == user_id:
-                return u
-        # if not found:
-        new_u = User(user_id, self.db_engine)
-        self.user_list.append(new_u)
-        return new_u
+        if user_id in self.user_dict:
+            return self.user_dict[user_id]
+        else:
+            new_user = User(user_id, self.db_engine)
+            self.user_dict[user_id] = new_user
+            return new_user
 
     def load_from_file(self, user_id, file_full_name, new_balance):
         '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
@@ -270,3 +273,17 @@ class UserManager:
         '''
         user = self.get_user(user_id)
         return Visual.show_onetime(user.onetime_transactions, only_relevant)
+
+    def bot_dialog(self, user_id, update):
+        user = self.get_user(user_id)
+
+        if user_id in self.bot_dialog_dict:
+            bot_dialog = self.bot_dialog_dict[user_id]
+            if bot_dialog.is_not_suitable(update):
+                bot_dialog = bd.create_bot_dialog(update, user)
+                self.bot_dialog_dict[user_id] = bot_dialog
+        else:
+            bot_dialog = bd.create_bot_dialog(update, user)
+            self.bot_dialog_dict[user_id] = bot_dialog
+
+        bot_dialog.new_message(update)

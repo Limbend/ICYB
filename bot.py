@@ -68,15 +68,20 @@ def refit(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(f'OK!\n{result}')
 
 
-def onetime(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    if len(context.args) > 0 and context.args[0] == 'add':
+# def onetime(update: Update, context: CallbackContext) -> None:
+#     user_id = update.message.from_user.id
+#     if len(context.args) > 0 and context.args[0] == 'add':
 
-        manager.add_onetime(
-            user_id, context.args[1], context.args[2], ' '.join(context.args[3:]))
-    else:
-        update.message.reply_text(
-            text=manager.show_onetime(user_id), quote=False)
+#         manager.add_onetime(
+#             user_id, context.args[1], context.args[2], ' '.join(context.args[3:]))
+#     else:
+#         update.message.reply_text(
+#             text=manager.show_onetime(user_id), quote=False)
+
+def bot_dialog(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    manager.bot_dialog(user_id, update)
+
 
 # def message(update: Update, context: CallbackContext) -> None:
 #     print(update.message.text)
@@ -89,7 +94,8 @@ updater.dispatcher.add_handler(CommandHandler('pred', forecast))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
-updater.dispatcher.add_handler(CommandHandler('onetime', onetime))
+updater.dispatcher.add_handler(
+    CommandHandler(['regular', 'onetime'], bot_dialog))
 # updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
 
 updater.start_polling()

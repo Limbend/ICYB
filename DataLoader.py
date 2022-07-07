@@ -26,12 +26,12 @@ def tinkoff_file_parse(path, db_engine, user_id):
 
 
 def amount_parser(string):
-    sep = (" ","`","'")
+    sep = (" ", "`", "'")
     result = re.search("-?(\d{1,3}[ `'])*\d+([\.\,]\d+)?", string).group(0)
-    result = result.replace(',','.')
+    result = result.replace(',', '.')
     for s in sep:
-        result = result.replace(s,'')
-        
+        result = result.replace(s, '')
+
     return float(result)
 
 
@@ -39,25 +39,26 @@ def ru_datetime_parser(string):
     l = len(string)
     dotC = string.count('.')
     сolonC = string.count(':')
-    
+
     if 4 <= l <= 5 and dotC == 1:
-        result = datetime.strptime(string, '%d.%m').replace(year=datetime.today().year)
+        result = datetime.strptime(string, '%d.%m').replace(
+            year=datetime.today().year)
     elif 6 <= l <= 8 and dotC == 2:
         result = datetime.strptime(string, '%d.%m.%y')
     elif 8 <= l <= 10 and dotC == 2:
         result = datetime.strptime(string, '%d.%m.%Y')
-        
+
     elif 7 <= l <= 11 and dotC == 1 and сolonC == 1:
-        result = datetime.strptime(string, '%d.%m %H:%M').replace(year=datetime.today().year)
+        result = datetime.strptime(string, '%d.%m %H:%M').replace(
+            year=datetime.today().year)
     elif 10 <= l <= 14 and dotC == 2 and сolonC == 1:
         result = datetime.strptime(string, '%d.%m.%y %H:%M')
     elif l == 16 and dotC == 2 and сolonC == 1:
         result = datetime.strptime(string, '%d.%m.%Y %H:%M')
-        
-        
+
     else:
         result = datetime(string)
-    
+
     return result
 
 
@@ -67,11 +68,16 @@ class DB_Engine:
             f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
         self.schema = schema
 
+    def replace_index(self, data):
+        return data.reset_index().rename(columns={'index': 'db_id'})
+
     def download_c_rules(self, user_id, table='dictionary_categories'):
         return pd.read_sql(f'SELECT key, value FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector).values.tolist()
 
     def download_regular(self, user_id, table='regular'):
-        return pd.read_sql(f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
+        return self.replace_index(pd.read_sql(
+            f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}',
+            self.connector))
 
     def download_onetime(self, user_id, table='onetime'):
         data = pd.read_sql(
@@ -80,10 +86,13 @@ class DB_Engine:
             data = pd.DataFrame([], columns=['date', 'description', 'amount'])
         else:
             data['date'] = pd.to_datetime(data['date'])
-        return data
+
+        return self.replace_index(data)
 
     def download_transactions(self, user_id, table='transactions'):
-        return pd.read_sql(f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date', self.connector)
+        return self.replace_index(pd.read_sql(
+            f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date',
+            self.connector))
 
     def add_transactions(self, data, user_id, table='transactions'):
         data = data[['date', 'amount', 'category',
