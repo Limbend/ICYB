@@ -159,6 +159,26 @@ class User:
         self.onetime_transactions = ee.add_onetime(
             db_engine, self.onetime_transactions, self.id, date, amount, description)
 
+    def delete_regular(self, db_engine, id):
+        '''Удаляет регулярное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            id: локальный id события, которое нужно удалить.
+        '''
+        self.regular_list = ee.delete_regular(
+            db_engine, self.regular_list, id)
+
+    def delete_onetime(self, db_engine, id):
+        '''Удаляет однократное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            id: локальный id события, которое нужно удалить.
+        '''
+        self.onetime_transactions = ee.delete_onetime(
+            db_engine, self.onetime_transactions, id)
+
 
 class UserManager:
     '''Класс для управления пользователями.

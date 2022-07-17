@@ -361,7 +361,7 @@ def add_regular(db_engine, regular_list, user_id, start_date, end_date, delta, d
         amount: сумма транзакции.
         search_f: функция поиска предыдущих транзакций. Одна из - ['description', 'amount_description', 'amount<_description', 'amount_category', 'amount<_category', 'dont_search']
         arg_sf: аргумент для функции поиска. Варианты для различных функций:
-            description - описание 
+            description - описание
             amount_description - описание, а amount будет равным самой сумме транзакции
             amount<_description - строка формата 'amount,description'
             amount_category - категория, а amount будет равным самой сумме транзакции
@@ -425,3 +425,31 @@ def add_onetime(db_engine, onetime_transactions, user_id, date, amount, descript
     ], axis=0).reset_index(drop=True)
 
     return onetime_transactions
+
+
+def delete_regular(db_engine, regular_list, id):
+    '''Удаляет регулярное событие.
+
+    Args:
+        db_engine: объект для работы с базой данных.
+        regular_list: cписок регулярных транзакций.
+        id: локальный id события, которое нужно удалить.
+    '''
+    db_id = tuple(str(i) for i in regular_list.loc[id, 'db_id'].values)
+    db_engine.delete_regular(db_id)
+
+    return regular_list.drop(id).reset_index(drop=True)
+
+
+def delete_onetime(db_engine, onetime_transactions, id):
+    '''Удаляет однократное событие.
+
+    Args:
+        db_engine: объект для работы с базой данных.
+        onetime_transactions: cписок разовых транзакций.
+        id: локальный id события, которое нужно удалить.
+    '''
+    db_id = tuple(str(i) for i in onetime_transactions.loc[id, 'db_id'].values)
+    db_engine.delete_onetime(db_id)
+
+    return onetime_transactions.drop(id).reset_index(drop=True)

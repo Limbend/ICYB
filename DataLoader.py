@@ -70,27 +70,28 @@ class DB_Engine:
         self.schema = schema
 
         self.sql_queries = {
-            'add_onetime': sql.text(f"INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
             'add_regular': sql.text(
-                f"INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " + 
+                f"INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
                 "VALUES (:user_id, :description, :search_f, :arg_sf, :amount, :start_date, :end_date, :d_years, :d_months, :d_days, :adjust_price, :adjust_date, :follow_overdue) RETURNING id"),
-
+            'add_onetime': sql.text(f"INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
+            'delete_regular': sql.text(f"UPDATE {self.schema}.regular SET is_del = true WHERE id in :id"),
+            'delete_onetime': sql.text(f"UPDATE {self.schema}.onetime SET is_del = true WHERE id in :id"),
         }
 
     def replace_index(self, data):
-        return data.reset_index().rename(columns={'index': 'db_id'})
+        return data.reset_index().rename(columns={'id': 'db_id'})
 
     def download_c_rules(self, user_id, table='dictionary_categories'):
         return pd.read_sql(f'SELECT key, value FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector).values.tolist()
 
     def download_regular(self, user_id, table='regular'):
         return self.replace_index(pd.read_sql(
-            f'SELECT description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id}',
+            f'SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False',
             self.connector))
 
     def download_onetime(self, user_id, table='onetime'):
         data = pd.read_sql(
-            f'SELECT date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector)
+            f'SELECT id, date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False', self.connector)
         if data.empty:
             data = pd.DataFrame([], columns=['date', 'description', 'amount'])
         else:
@@ -100,7 +101,7 @@ class DB_Engine:
 
     def download_transactions(self, user_id, table='transactions'):
         return self.replace_index(pd.read_sql(
-            f'SELECT date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date',
+            f'SELECT id, date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date',
             self.connector))
 
     def add_transactions(self, data, user_id, table='transactions'):
@@ -148,3 +149,11 @@ class DB_Engine:
     def add_onetime(self, data):
         result = self.connector.execute(self.sql_queries['add_onetime'], data)
         return result.first()[0]
+
+    def delete_regular(self, db_id):
+        self.connector.execute(
+            self.sql_queries['delete_regular'], {'id': db_id})
+
+    def delete_onetime(self, db_id):
+        self.connector.execute(
+            self.sql_queries['delete_onetime'], {'id': db_id})

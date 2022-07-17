@@ -116,6 +116,10 @@ class BotDialogRegular(BotDialog):
                               description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue)
         self.reply_row(update, self.user.regular_list.index[-1])
 
+    def reply_delete(self, update: Update, id, db_engine: dl.DB_Engine):
+        self.user.delete_regular(db_engine, [int(s) for s in id.split(',')])
+        self.reply_table(update)
+
     def new_message(self, update: Update, db_engine: dl.DB_Engine):
         command = shlex.split(update.message.text)
         if len(command) > 1:
@@ -136,6 +140,10 @@ class BotDialogRegular(BotDialog):
                 self.reply_add(update, command[2:], db_engine)
                 return
 
+            elif command[1] == 'del':
+                self.reply_delete(update, command[2], db_engine)
+                return
+
         else:
             self.reply_table(update)
             return
@@ -146,13 +154,13 @@ class BotDialogOnetime(BotDialogRegular):
         BotDialog.__init__(self, user)
         self.cmd_mask = '/onetime'
 
-    def reply_table(self, update: Update, columns=['description','date', 'amount'], only_relevant=True):
+    def reply_table(self, update: Update, columns=['description', 'date', 'amount'], only_relevant=True):
         update.message.reply_text(
             text=Visual.show_onetime(
                 self.user.onetime_transactions, only_relevant, columns),
             quote=False)
 
-    def reply_row(self, update: Update, index, columns=['description','date', 'amount']):
+    def reply_row(self, update: Update, index, columns=['description', 'date', 'amount']):
         update.message.reply_text(
             text=Visual.show_onetime(
                 self.user.onetime_transactions, False, columns, index),
@@ -174,3 +182,7 @@ class BotDialogOnetime(BotDialogRegular):
 
         self.user.add_onetime(db_engine, date, amount, description)
         self.reply_row(update, self.user.onetime_transactions.index[-1])
+
+    def reply_delete(self, update: Update, id, db_engine: dl.DB_Engine):
+        self.user.delete_onetime(db_engine, [int(s) for s in id.split(',')])
+        self.reply_table(update)

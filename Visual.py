@@ -6,8 +6,6 @@ from datetime import date, datetime
 # import dataframe_image as dfi # dataframe-image==0.1.1
 import io
 
-from sqlalchemy import column
-
 
 FORMATTERS = {
     'date': lambda x: x.strftime('%d.%m.%Y'),
@@ -132,7 +130,9 @@ def predict_info(events, predicted_transactions):
 
 HELP_MESSAGE = {
     '/regular add': '!!! /regular add help',
-    
+
 }
+
+
 def reply_help(cmd):
     return HELP_MESSAGE.get(cmd, '!!! default help message')

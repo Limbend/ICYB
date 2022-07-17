@@ -31,6 +31,12 @@ def ping(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(f'pong {update.effective_user.first_name}')
 
 
+def reset(update: Update, context: CallbackContext) -> None:
+    if update.message.from_user.id == settings['trusted_chat_id']:
+        global manager
+        manager = UserManager(settings['db_connector'])
+
+
 def download_file(update: Update, context: CallbackContext) -> None:
     balance = ' '.join(context.args[0:])
     user_id = update.message.from_user.id
@@ -68,16 +74,6 @@ def refit(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(f'OK!\n{result}')
 
 
-# def onetime(update: Update, context: CallbackContext) -> None:
-#     user_id = update.message.from_user.id
-#     if len(context.args) > 0 and context.args[0] == 'add':
-
-#         manager.add_onetime(
-#             user_id, context.args[1], context.args[2], ' '.join(context.args[3:]))
-#     else:
-#         update.message.reply_text(
-#             text=manager.show_onetime(user_id), quote=False)
-
 def bot_dialog(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     manager.bot_dialog(user_id, update)
@@ -86,12 +82,11 @@ def bot_dialog(update: Update, context: CallbackContext) -> None:
 # def message(update: Update, context: CallbackContext) -> None:
 #     print(update.message.text)
 #     user_id = update.message.from_user.id
-
-
 updater = Updater(settings[L_TYPE+'-bot_token'])
 
 updater.dispatcher.add_handler(CommandHandler('pred', forecast))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
+updater.dispatcher.add_handler(CommandHandler('reset', reset))
 updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
 updater.dispatcher.add_handler(
