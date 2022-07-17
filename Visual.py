@@ -96,6 +96,7 @@ def show_row(data, index, columns):
 
 def show_events(events):
     result = events.copy()
+    result.index = result.index.strftime('%d.%m.%Y')
     return 'Регулярные транзакции\n        ' + show_table(result, columns=list(result))
 
 
@@ -127,3 +128,11 @@ def successful_adding_transactions(transactions):
 def predict_info(events, predicted_transactions):
     table = show_events(events)
     return table + f"\n\n\nДополнительно к этим транзакциям, средний расход в день составляет: {predicted_transactions['amount'].mean():.2f}"
+
+
+HELP_MESSAGE = {
+    '/regular add': '!!! /regular add help',
+    
+}
+def reply_help(cmd):
+    return HELP_MESSAGE.get(cmd, '!!! default help message')

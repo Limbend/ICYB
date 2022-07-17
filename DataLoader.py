@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, sql
 import pickle
 import re
 from datetime import date, datetime
@@ -37,6 +37,7 @@ def amount_parser(string):
 
 def ru_datetime_parser(string):
     l = len(string)
+    string = string.replace(',', '.')
     dotC = string.count('.')
     сolonC = string.count(':')
 
@@ -57,7 +58,7 @@ def ru_datetime_parser(string):
         result = datetime.strptime(string, '%d.%m.%Y %H:%M')
 
     else:
-        result = datetime(string)
+        result = 'NaT'
 
     return result
 
@@ -67,6 +68,14 @@ class DB_Engine:
         self.connector = create_engine(
             f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
         self.schema = schema
+
+        self.sql_queries = {
+            'add_onetime': sql.text(f"INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
+            'add_regular': sql.text(
+                f"INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " + 
+                "VALUES (:user_id, :description, :search_f, :arg_sf, :amount, :start_date, :end_date, :d_years, :d_months, :d_days, :adjust_price, :adjust_date, :follow_overdue) RETURNING id"),
+
+        }
 
     def replace_index(self, data):
         return data.reset_index().rename(columns={'index': 'db_id'})
@@ -132,6 +141,10 @@ class DB_Engine:
         result = self.connector.engine.execute(sql)
         print(result)
 
-    def add_onetime(self, data, table='onetime'):
-        data.to_sql(table, self.connector, schema=self.schema,
-                    if_exists='append', index=False)
+    def add_regular(self, data):
+        result = self.connector.execute(self.sql_queries['add_regular'], data)
+        return result.first()[0]
+
+    def add_onetime(self, data):
+        result = self.connector.execute(self.sql_queries['add_onetime'], data)
+        return result.first()[0]

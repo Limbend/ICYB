@@ -122,6 +122,31 @@ class User:
 
         return {'time': time_passed, 'event_count': len(self.transactions), 'ml_event_count': len(data)}
 
+    def add_regular(self, db_engine, start_date, end_date, delta, description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue):
+        '''Добавляет регулярное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            start_date: дата первой транзакции.
+            end_date: дата, после которой перестать прогнозировать данную транзакцию
+            delta: сколько лет, месяцев, дней  между транзакциями. Формата - [d_years, d_months, d_days]
+            description: описание транзакции.
+            amount: сумма транзакции.
+            search_f: функция поиска предыдущих транзакций. Одна из - ['description', 'amount_description', 'amount<_description', 'amount_category', 'amount<_category', 'dont_search']
+            arg_sf: аргумент для функции поиска. Варианты для различных функций:
+                description - описание 
+                amount_description - описание, а amount будет равным самой сумме транзакции
+                amount<_description - строка формата 'amount,description'
+                amount_category - категория, а amount будет равным самой сумме транзакции
+                amount<_category - строка формата 'amount,category'
+                dont_search - None
+            adjust_price: пересчитывать ли сумму транзакции, основываясь на предыдущих.
+            adjust_date: пересчитывать ли дату транзакции, основываясь на предыдущих.
+            follow_overdue: следить ли за просроченными транзакциями.
+        '''
+        self.regular_list = ee.add_regular(
+            db_engine, self.regular_list, self.id, start_date, end_date, delta, description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue)
+
     def add_onetime(self, db_engine, date, amount, description):
         '''Добавляет однократное событие.
 
@@ -252,18 +277,6 @@ class UserManager:
             'message': Visual.predict_info(events, self.get_user(user_id).predicted_transactions)
         }
 
-    def add_onetime(self, user_id, date, amount, description):
-        '''Добавляет однократное событие.
-
-        Args:
-            user_id: id пользователя.
-            date: дата транзакции.
-            amount: сумма транзакции.
-            description: описание транзакции.
-        '''
-        self.get_user(user_id).add_onetime(self.db_engine, dl.ru_datetime_parser(
-            date), dl.amount_parser(amount), description)
-
     def show_onetime(self, user_id, only_relevant=True):
         '''Добавляет однократное событие.
 
@@ -286,4 +299,4 @@ class UserManager:
             bot_dialog = bd.create_bot_dialog(update, user)
             self.bot_dialog_dict[user_id] = bot_dialog
 
-        bot_dialog.new_message(update)
+        bot_dialog.new_message(update, self.db_engine)

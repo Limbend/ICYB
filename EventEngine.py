@@ -347,6 +347,59 @@ def fit_model(data, sbs_model=None):
     return sbs_model
 
 
+def add_regular(db_engine, regular_list, user_id, start_date, end_date, delta, description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue):
+    '''Добавляет регулярное событие.
+
+    Args:
+        db_engine: объект для работы с базой данных.
+        regular_list: cписок регулярных транзакций.
+        user_id: id пользователя.
+        start_date: дата первой транзакции.
+        end_date: дата, после которой перестать прогнозировать данную транзакцию
+        delta: сколько лет, месяцев, дней  между транзакциями. Формата - [d_years, d_months, d_days]
+        description: описание транзакции.
+        amount: сумма транзакции.
+        search_f: функция поиска предыдущих транзакций. Одна из - ['description', 'amount_description', 'amount<_description', 'amount_category', 'amount<_category', 'dont_search']
+        arg_sf: аргумент для функции поиска. Варианты для различных функций:
+            description - описание 
+            amount_description - описание, а amount будет равным самой сумме транзакции
+            amount<_description - строка формата 'amount,description'
+            amount_category - категория, а amount будет равным самой сумме транзакции
+            amount<_category - строка формата 'amount,category'
+            dont_search - None
+        adjust_price: пересчитывать ли сумму транзакции, основываясь на предыдущих.
+        adjust_date: пересчитывать ли дату транзакции, основываясь на предыдущих.
+        follow_overdue: следить ли за просроченными транзакциями.
+    Returns:
+        Итоговый список регулярных событий
+    '''
+    new_row = {
+        'user_id': user_id,
+        'description': description,
+        'search_f': search_f,
+        'arg_sf': arg_sf,
+        'amount': amount,
+        'start_date': start_date,
+        'end_date': end_date,
+        'd_years': delta[0],
+        'd_months': delta[1],
+        'd_days': delta[2],
+        'adjust_price': adjust_price,
+        'adjust_date': adjust_date,
+        'follow_overdue': follow_overdue
+    }
+    db_index = db_engine.add_regular(new_row)
+    new_row['db_id'] = db_index
+    del new_row['user_id']
+
+    regular_list = pd.concat([
+        regular_list,
+        pd.DataFrame([new_row])
+    ], axis=0).reset_index(drop=True)
+
+    return regular_list
+
+
 def add_onetime(db_engine, onetime_transactions, user_id, date, amount, description):
     '''Добавляет однократное событие.
 
@@ -360,10 +413,15 @@ def add_onetime(db_engine, onetime_transactions, user_id, date, amount, descript
     Returns:
         Итоговый список однократных событий
     '''
-    new_row = pd.DataFrame([[user_id, description, amount, date]], columns=[
-                           'user_id', 'description', 'amount', 'date'])
-    onetime_transactions = pd.concat(
-        [onetime_transactions, new_row[['description', 'amount', 'date']]], axis=0)
-    db_engine.add_onetime(new_row)
+    new_row = {'user_id': user_id, 'description': description,
+               'amount': amount, 'date': date}
+    db_index = db_engine.add_onetime(new_row)
+    new_row['db_id'] = db_index
+    del new_row['user_id']
+
+    onetime_transactions = pd.concat([
+        onetime_transactions,
+        pd.DataFrame([new_row])
+    ], axis=0).reset_index(drop=True)
 
     return onetime_transactions
