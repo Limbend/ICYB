@@ -28,7 +28,7 @@ manager = UserManager(settings['db_connector'])
 
 
 def ping(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f'pong {update.effective_user.first_name}')
+    update.message.reply_text(f'pong {update.effective_user.first_name}', quote=True)
 
 
 def reset(update: Update, context: CallbackContext) -> None:
