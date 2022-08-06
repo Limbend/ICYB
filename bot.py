@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, Filters
 import json
 import logging
 import os
@@ -7,7 +7,7 @@ import os
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
-from Users import UserManager
+from Manager import UserManager
 
 
 logging.basicConfig(format='%(asctime)-12s - %(name)-12s - %(levelname)-8s - %(message)s',
@@ -64,7 +64,7 @@ def forecast(update: Update, context: CallbackContext) -> None:
     report_obj = manager.report_events_and_transactions(
         user_id, datetime.today() + relativedelta(months=months))
     update.message.reply_photo(photo=report_obj['plot'], quote=True)
-    update.message.reply_text(text=report_obj['message'], quote=False)
+    update.message.reply_text(text=report_obj['message'], quote=False, parse_mode='html')
 
 
 def refit(update: Update, context: CallbackContext) -> None:
@@ -79,9 +79,14 @@ def bot_dialog(update: Update, context: CallbackContext) -> None:
     manager.bot_dialog(user_id, update)
 
 
-# def message(update: Update, context: CallbackContext) -> None:
-#     print(update.message.text)
-#     user_id = update.message.from_user.id
+def keyboard_callback(update: Update, context: CallbackContext) -> None:
+    user_id = update.callback_query.message.chat_id
+    manager.bot_dialog_keyboard(user_id, update)
+
+def message(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    manager.bot_dialog(user_id, update)
+
 updater = Updater(settings[L_TYPE+'-bot_token'])
 
 updater.dispatcher.add_handler(CommandHandler('pred', forecast))
@@ -91,7 +96,8 @@ updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
 updater.dispatcher.add_handler(
     CommandHandler(['regular', 'onetime'], bot_dialog))
-# updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
+updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
+updater.dispatcher.add_handler(CallbackQueryHandler(keyboard_callback))
 
 updater.start_polling()
 updater.idle()

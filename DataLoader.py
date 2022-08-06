@@ -71,11 +71,13 @@ class DB_Engine:
 
         self.sql_queries = {
             'add_regular': sql.text(
-                f"INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
+                f"INSERT INTO {self.schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
                 "VALUES (:user_id, :description, :search_f, :arg_sf, :amount, :start_date, :end_date, :d_years, :d_months, :d_days, :adjust_price, :adjust_date, :follow_overdue) RETURNING id"),
-            'add_onetime': sql.text(f"INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
+            'add_onetime': sql.text(f"INSERT INTO {self.schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
             'delete_regular': sql.text(f"UPDATE {self.schema}.regular SET is_del = true WHERE id in :id"),
             'delete_onetime': sql.text(f"UPDATE {self.schema}.onetime SET is_del = true WHERE id in :id"),
+            'update_regular': sql.text(f"UPDATE {self.schema}.regular SET :column = :value WHERE id in :id"),
+            'update_onetime': sql.text(f"UPDATE {self.schema}.onetime SET :column = :value WHERE id in :id"),
         }
 
     def replace_index(self, data):
@@ -86,12 +88,12 @@ class DB_Engine:
 
     def download_regular(self, user_id, table='regular'):
         return self.replace_index(pd.read_sql(
-            f'SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False',
+            f'SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY start_date',
             self.connector))
 
     def download_onetime(self, user_id, table='onetime'):
         data = pd.read_sql(
-            f'SELECT id, date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False', self.connector)
+            f'SELECT id, date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date', self.connector)
         if data.empty:
             data = pd.DataFrame([], columns=['date', 'description', 'amount'])
         else:
@@ -140,20 +142,15 @@ class DB_Engine:
 
         sql = f"UPDATE {self.schema}.{table} SET is_del = true WHERE user_id = {user_id} AND {time}"
         result = self.connector.engine.execute(sql)
-        print(result)
 
-    def add_regular(self, data):
-        result = self.connector.execute(self.sql_queries['add_regular'], data)
+    def add_event(self, table, data):
+        result = self.connector.execute(self.sql_queries['add_'+table], data)
         return result.first()[0]
 
-    def add_onetime(self, data):
-        result = self.connector.execute(self.sql_queries['add_onetime'], data)
-        return result.first()[0]
-
-    def delete_regular(self, db_id):
+    def delete_event(self, table, db_id):
         self.connector.execute(
-            self.sql_queries['delete_regular'], {'id': db_id})
+            self.sql_queries['delete_'+table], {'id': db_id})
 
-    def delete_onetime(self, db_id):
+    def edit_event(self, table, db_id, column, value):
         self.connector.execute(
-            self.sql_queries['delete_onetime'], {'id': db_id})
+            self.sql_queries['update_'+table], {'id': db_id, 'column': column, 'value': value})

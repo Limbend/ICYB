@@ -49,7 +49,7 @@ class User:
         self.transactions = dl.tinkoff_file_parse(
             file_full_name, db_engine, self.id)
         self.transactions = self.__add_and_merge_transactions(
-            self.transactions, new_balance, db_engine, self.id)
+            self.transactions, new_balance, db_engine)
 
         return self.transactions
 
@@ -195,7 +195,7 @@ class User:
             'adjust_date': adjust_date,
             'follow_overdue': follow_overdue
         }
-        db_index = db_engine.add_regular(new_row)
+        db_index = db_engine.add_event('regular', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
 
@@ -215,7 +215,7 @@ class User:
         '''
         new_row = {'user_id': self.id, 'description': description,
                    'amount': amount, 'date': date}
-        db_index = db_engine.add_onetime(new_row)
+        db_index = db_engine.add_event('onetime', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
 
@@ -233,9 +233,9 @@ class User:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
         '''
-        db_id = tuple(str(i)
-                      for i in self.regular_list.loc[id, 'db_id'].values)
-        db_engine.delete_regular(db_id)
+        db_id = tuple(
+            str(i) for i in self.regular_list.loc[id, 'db_id'].values)
+        db_engine.delete_event('regular', db_id)
 
         self.regular_list = self.regular_list.drop(id).reset_index(drop=True)
 
@@ -246,12 +246,27 @@ class User:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
         '''
-        db_id = tuple(str(i)
-                      for i in self.onetime_transactions.loc[id, 'db_id'].values)
-        db_engine.delete_onetime(db_id)
+        db_id = tuple(
+            str(i) for i in self.onetime_transactions.loc[id, 'db_id'].values)
+        db_engine.delete_event('onetime', db_id)
 
         self.onetime_transactions = self.onetime_transactions.drop(
             id).reset_index(drop=True)
+
+    def edit_regular(self, db_engine, id, parameter: str, new_value):
+        '''Удаляет регулярное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            id: локальный id события, которое нужно удалить.
+        '''
+        # !!! Добавить возможность массвого изменения
+        # db_id = tuple(
+        #     str(i) for i in self.regular_list.loc[id, 'db_id'].values) 
+        db_id = str(self.regular_list.loc[id, 'db_id'])
+        db_engine.edit_event('regular', db_id, parameter, new_value)
+
+        self.regular_list.loc[id, parameter] = new_value
 
     def __predict_regular_events(self, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
         # !!!
@@ -306,7 +321,7 @@ class User:
                 new_start = r_event['start_date'] + d_date * j
 
             # Проверка на просрочку
-            j -= 1
+            # j -= 1 # !!!
             if(r_event['follow_overdue'] and j > 0):
                 pay_date_overdue = g_start_date + relativedelta(days=1)
 
@@ -324,8 +339,10 @@ class User:
                     # Посчитать сколько должно быть регулярок между стартовой датой r_event['start_date'] и начальной датой поиска g_start_date.
                     # Вычесть из них сколько по факту было.
 
+                    # count_overdue = j - sum(self.__get_markers_regular(
+                    #     self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1 # !!!
                     count_overdue = j - sum(self.__get_markers_regular(
-                        self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1
+                        self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event))
                     # Если число положительное, то есть просрочки.
                     if(count_overdue > 0):
                         for i_overdue in range(count_overdue):
@@ -410,7 +427,6 @@ class User:
             (len(full_transactions[full_transactions['is_new']]) > 0) and \
                 (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > new_start_date):
 
-            print(f"Delete transactions after {new_start_date} in DB")
             db_engine.delete_transactions(
                 self.id, full_transactions[full_transactions['is_new']].iloc[0]['date'])
 

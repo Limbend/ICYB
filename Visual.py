@@ -12,6 +12,7 @@ FORMATTERS = {
     'start_date': lambda x: x.strftime('%d.%m.%Y'),
     'end_date': lambda x: x.strftime('%d.%m.%Y') if not(pd.isna(x)) else 'NaT',
     'amount': "{:.2f}".format,
+    # 'description': "{:<17}".format,
 }
 
 
@@ -80,8 +81,8 @@ def comparison_plot(comparison):
 
 
 def show_table(data, columns):
-    return data[columns].to_string(
-        formatters={key: FORMATTERS[key] for key in columns if key in FORMATTERS})
+    return '<pre>' + data[columns].to_string(
+        formatters={key: FORMATTERS[key] for key in columns if key in FORMATTERS}) + '</pre>'
 
 
 def show_row(data, index, columns):
@@ -89,7 +90,7 @@ def show_row(data, index, columns):
     formatters = {key: FORMATTERS[key] for key in columns if key in FORMATTERS}
 
     result[list(formatters)] = result.apply(formatters)
-    return result.transpose().to_string()
+    return '<pre>' + result.transpose().to_string() + '</pre>'
 
 
 def show_events(events):
@@ -120,7 +121,7 @@ def show_onetime(onetime, only_relevant, columns, index=None):
 
 
 def successful_adding_transactions(transactions):
-    return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРащница прогноза и фактического баланса:"
+    return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРазница прогноза и фактического баланса:"
 
 
 def predict_info(events, predicted_transactions):
@@ -135,4 +136,4 @@ HELP_MESSAGE = {
 
 
 def reply_help(cmd):
-    return HELP_MESSAGE.get(cmd, '!!! default help message')
+    return HELP_MESSAGE.get(cmd, f'!!! default help message for {cmd}')
