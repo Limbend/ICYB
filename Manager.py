@@ -21,7 +21,7 @@ class BotDialog:
     def reply_help(self, update: Update, cmd):
         update.message.reply_text(
             text=Visual.reply_help(' '.join([self.cmd_mask, cmd])),
-            quote=True)
+            quote=True, parse_mode='html')
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine):
         update.message.reply_text(
@@ -39,8 +39,8 @@ class BotDialogRegular(BotDialog):
             # 'search_f': '',
             # 'arg_sf': '',
             'amount': 'Сумма\nВ формате: 1000.00',
-            'start_date': 'Начальная дата\nВ формате: 30.12.2000',
-            'end_date': 'Начальная дата\nВ формате: 30.12.2000',
+            'start_date': 'Начальная дата\nВ формате: 30.12.2200',
+            'end_date': 'Начальная дата\nВ формате: 30.12.2200',
             'd_years': 'Количество лет между транзакциями\nЦелое число',
             'd_months': 'Количество месяцев между транзакциями\nЦелое число',
             'd_days': 'Количество дней между транзакциями\nЦелое число',
@@ -123,8 +123,12 @@ class BotDialogRegular(BotDialog):
                               description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue)
         self.reply_row(update, self.user.regular_list.index[-1])
 
-    def reply_delete(self, update: Update, id, db_engine: dl.DB_Engine):
-        self.user.delete_regular(db_engine, [int(s) for s in id.split(',')])
+    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+        if len(cmd) < 1 or cmd[0] == 'help':
+            self.reply_help(update, 'del')
+            return
+        self.user.delete_regular(
+            db_engine, [int(s) for s in cmd[0].split(',')])
         self.reply_table(update)
 
     def reply_edit(self, update: Update, cmd: list, db_engine: dl.DB_Engine, message: Message = None):
@@ -149,7 +153,8 @@ class BotDialogRegular(BotDialog):
         command = shlex.split(update.message.text)
         if command[0][0] != '/' and self.is_wait_answer:
             self.is_wait_answer = False
-            self.wait_answer_func(update, command, db_engine, **self.wait_answer_kwargs)
+            self.wait_answer_func(
+                update, command, db_engine, **self.wait_answer_kwargs)
         if len(command) > 1:
             if command[1] == 'show':
                 if len(command) == 3:
@@ -169,7 +174,7 @@ class BotDialogRegular(BotDialog):
                 return
 
             elif command[1] == 'del':
-                self.reply_delete(update, command[2], db_engine)
+                self.reply_delete(update, command[2:], db_engine)
                 return
 
             elif command[1] == 'edit':
@@ -218,7 +223,8 @@ class BotDialogRegular(BotDialog):
 
     def __edit_parameter(self, update: Update, cmd: list, db_engine: dl.DB_Engine, id_event, parameter):
         try:
-            self.user.edit_regular(db_engine, id_event, parameter, update.message.text)
+            self.user.edit_regular(db_engine, id_event,
+                                   parameter, update.message.text)
         except ValueError:
             self.__reply_edit_parameter(update, id_event, parameter)
 
@@ -227,6 +233,12 @@ class BotDialogOnetime(BotDialogRegular):
     def __init__(self, user):
         BotDialog.__init__(self, user)
         self.cmd_mask = '/onetime'
+
+        self.parameters = {
+            'description': 'Описание\nМаксимум 25 символов',
+            'date': 'Дата\nВ формате: 30.12.2200',
+            'amount': 'Сумма\nВ формате: 1000.00',
+        }
 
     def reply_table(self, update: Update, columns=['description', 'date', 'amount'], only_relevant=True):
         update.message.reply_text(
@@ -257,8 +269,12 @@ class BotDialogOnetime(BotDialogRegular):
         self.user.add_onetime(db_engine, date, amount, description)
         self.reply_row(update, self.user.onetime_transactions.index[-1])
 
-    def reply_delete(self, update: Update, id, db_engine: dl.DB_Engine):
-        self.user.delete_onetime(db_engine, [int(s) for s in id.split(',')])
+    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+        if len(cmd) < 1 or cmd[0] == 'help':
+            self.reply_help(update, 'del')
+            return
+        self.user.delete_onetime(
+            db_engine, [int(s) for s in cmd[0].split(',')])
         self.reply_table(update)
 
 

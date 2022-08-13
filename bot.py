@@ -28,7 +28,8 @@ manager = UserManager(settings['db_connector'])
 
 
 def ping(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(f'pong {update.effective_user.first_name}', quote=True)
+    update.message.reply_text(
+        f'pong {update.effective_user.first_name}', quote=True)
 
 
 def reset(update: Update, context: CallbackContext) -> None:
@@ -64,7 +65,8 @@ def forecast(update: Update, context: CallbackContext) -> None:
     report_obj = manager.report_events_and_transactions(
         user_id, datetime.today() + relativedelta(months=months))
     update.message.reply_photo(photo=report_obj['plot'], quote=True)
-    update.message.reply_text(text=report_obj['message'], quote=False, parse_mode='html')
+    update.message.reply_text(
+        text=report_obj['message'], quote=False, parse_mode='html')
 
 
 def refit(update: Update, context: CallbackContext) -> None:
@@ -83,9 +85,11 @@ def keyboard_callback(update: Update, context: CallbackContext) -> None:
     user_id = update.callback_query.message.chat_id
     manager.bot_dialog_keyboard(user_id, update)
 
+
 def message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     manager.bot_dialog(user_id, update)
+
 
 updater = Updater(settings[L_TYPE+'-bot_token'])
 

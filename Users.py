@@ -220,7 +220,7 @@ class User:
         del new_row['user_id']
 
         onetime_transactions = pd.concat([
-            onetime_transactions,
+            self.onetime_transactions,
             pd.DataFrame([new_row])
         ], axis=0).reset_index(drop=True)
 
@@ -262,14 +262,13 @@ class User:
         '''
         # !!! Добавить возможность массвого изменения
         # db_id = tuple(
-        #     str(i) for i in self.regular_list.loc[id, 'db_id'].values) 
+        #     str(i) for i in self.regular_list.loc[id, 'db_id'].values)
         db_id = str(self.regular_list.loc[id, 'db_id'])
         db_engine.edit_event('regular', db_id, parameter, new_value)
 
         self.regular_list.loc[id, parameter] = new_value
 
     def __predict_regular_events(self, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
-        # !!!
         new_regular_events = self.regular_list.copy()
         result = []
         j_limit = 1000
@@ -411,7 +410,6 @@ class User:
         return cleared_df.resample('1D').sum()
 
     def __add_and_merge_transactions(self, new_transactions, new_balance, db_engine):
-        # !!!
         old_transactions = db_engine.download_transactions(
             self.id)  # !!! Зачем 2 раза загружать?
         old_transactions['is_new'] = False
@@ -441,16 +439,13 @@ class User:
         return full_transactions.reset_index(drop=True)
 
     def __get_balance_past(self, start, transactions):
-        # !!!
         result = transactions.cumsum()
         return result + (start - result.iloc[-1])
 
     def __get_balance_future(self, start, transactions):
-        # !!!
         return transactions.cumsum() + start
 
     def __drop_paired(self, data: pd.DataFrame, by: str):
-        # !!!
         sort_values = data[by].sort_values()
         abs_values = sort_values.abs()
         c1 = sort_values.groupby(abs_values).transform(pd.Series.cumsum) > 0
@@ -460,12 +455,10 @@ class User:
         return data[c1 | c2]
 
     def __drop_outliers(self, data, q=0.16):
-        # !!!
         data = data[data['amount'] > data['amount'].quantile(q)]
         return data
 
     def __get_default_parameters(self):
-        # !!!
         return {
             'target_column': 'amount',
             'column_adding_method': False,
@@ -480,7 +473,6 @@ class User:
         return sbs_model
 
     def __encoder_in_sum(self, data, target_column, sum_column, top_size, sort_ascending=True):
-        # !!!
         result = data.groupby(target_column)[sum_column].sum(
         ).sort_values(ascending=sort_ascending)[:top_size]
         result = {name: (top_size-i+1)/(top_size+1)
@@ -488,7 +480,6 @@ class User:
         return result
 
     def __encoder_in_count(self, data, target_column, top_size, sort_ascending=False):
-        # !!!
         result = data.groupby(target_column)[target_column].count(
         ).sort_values(ascending=sort_ascending)[:top_size]
         result = {name: (top_size-i+1)/(top_size+1)
@@ -496,7 +487,6 @@ class User:
         return result
 
     def __calculate_features(self, data, method):
-        # !!!
         data = data[['amount', 'category', 'description']]
 
         if method in ('sum', 'coumt_sum'):
@@ -518,7 +508,6 @@ class User:
         return data.drop(['category', 'description'], axis=1)
 
     def __get_markers_regular(self, data, event):
-        # !!!
         if event['search_f'] == 'description':
             return data['description'] == event['arg_sf']
 
@@ -543,7 +532,6 @@ class User:
             f'The search function /"{event["search_f"]}/" does not exist')
 
     def __merge_of_predicts(self, predicted_events, predicted_transactions, start_balance):
-        # !!!
         merged_transactions = pd.concat([
             predicted_events.set_index('date')[['amount']],
             predicted_transactions

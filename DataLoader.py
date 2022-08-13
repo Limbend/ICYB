@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine, sql
+import psycopg2
+from psycopg2.sql import SQL, Identifier
+from psycopg2.extensions import AsIs
 import pickle
 import re
 from datetime import date, datetime
@@ -64,47 +66,52 @@ def ru_datetime_parser(string):
 
 
 class DB_Engine:
-    def __init__(self, ip, port, user, password, db_name, schema):
-        self.connector = create_engine(
-            f'postgresql://{user}:{password}@{ip}:{port}/{db_name}')
+    def __init__(self, host, port, user, password, dbname, schema):
+        self.connector = psycopg2.connect(
+            host=host, port=port, user=user, password=password, dbname=dbname)
+        self.cursor = self.connector.cursor()
         self.schema = schema
 
         self.sql_queries = {
-            'add_regular': sql.text(
-                f"INSERT INTO {self.schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
-                "VALUES (:user_id, :description, :search_f, :arg_sf, :amount, :start_date, :end_date, :d_years, :d_months, :d_days, :adjust_price, :adjust_date, :follow_overdue) RETURNING id"),
-            'add_onetime': sql.text(f"INSERT INTO {self.schema}.onetime (user_id, date, description, amount) VALUES (:user_id, :date, :description, :amount) RETURNING id"),
-            'delete_regular': sql.text(f"UPDATE {self.schema}.regular SET is_del = true WHERE id in :id"),
-            'delete_onetime': sql.text(f"UPDATE {self.schema}.onetime SET is_del = true WHERE id in :id"),
-            'update_regular': sql.text(f"UPDATE {self.schema}.regular SET :column = :value WHERE id in :id"),
-            'update_onetime': sql.text(f"UPDATE {self.schema}.onetime SET :column = :value WHERE id in :id"),
+            'get_c_rules': SQL("SELECT key, value FROM {schema}.dictionary_categories WHERE user_id = %(user_id)s"),
+            'get_regular': SQL("SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {schema}.regular WHERE user_id = %(user_id)s AND is_del = False ORDER BY start_date"),
+            'get_onetime': SQL("SELECT id, date, description, amount FROM {schema}.onetime WHERE user_id = %(user_id)s AND is_del = False ORDER BY date"),
+            'get_transactions': SQL("SELECT id, date, amount, category, description, balance FROM {schema}.transactions WHERE user_id = %(user_id)s AND is_del = False ORDER BY date"),
+            'get_last_model': SQL("SELECT dump FROM {schema}.sbs_models WHERE user_id = %(user_id)s ORDER BY id DESC LIMIT 1"),
+
+            'add_regular': SQL(
+                "INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
+                "VALUES (%(user_id)s, %(description)s, %(search_f)s, %(arg_sf)s, %(amount)s, %(start_date)s, %(end_date)s, %(d_years)s, %(d_months)s, %(d_days)s, %(adjust_price)s, %(adjust_date)s, %(follow_overdue)s) RETURNING id"),
+            'add_onetime': SQL("INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (%(user_id)s, %(date)s, %(description)s, %(amount)s) RETURNING id"),
+
+            'delete_transactions': SQL("UPDATE {schema}.transactions SET is_del = true WHERE user_id = %(user_id)s AND %(time)s"),
+            'delete_regular': SQL("UPDATE {schema}.regular SET is_del = true WHERE id = %(id)s"),
+            'delete_onetime': SQL("UPDATE {schema}.onetime SET is_del = true WHERE id = %(id)s"),
+
+            'update_regular': SQL("UPDATE {schema}.regular SET %(column)s = %(value)s WHERE id = %(id)s"),
+            'update_onetime': SQL("UPDATE {schema}.onetime SET %(column)s = %(value)s WHERE id = %(id)s"),
         }
 
-    def replace_index(self, data):
-        return data.reset_index().rename(columns={'id': 'db_id'})
+        self.sql_queries = {key: self.sql_queries[key].format(
+            schema=Identifier(self.schema),
+        ) for key in self.sql_queries.keys()}
 
-    def download_c_rules(self, user_id, table='dictionary_categories'):
-        return pd.read_sql(f'SELECT key, value FROM {self.schema}.{table} WHERE user_id = {user_id}', self.connector).values.tolist()
+    def download_c_rules(self, user_id):
+        return self.__read_sql('get_c_rules', {'user_id': user_id})[['key', 'value']].values.tolist()
 
-    def download_regular(self, user_id, table='regular'):
-        return self.replace_index(pd.read_sql(
-            f'SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY start_date',
-            self.connector))
+    def download_regular(self, user_id):
+        return self.__read_sql('get_regular', {'user_id': user_id})
 
-    def download_onetime(self, user_id, table='onetime'):
-        data = pd.read_sql(
-            f'SELECT id, date, description, amount FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date', self.connector)
-        if data.empty:
-            data = pd.DataFrame([], columns=['date', 'description', 'amount'])
-        else:
-            data['date'] = pd.to_datetime(data['date'])
+    def download_onetime(self, user_id):
+        data = self.__read_sql('get_onetime', {'user_id': user_id})
+        # if data.empty:
+        #     data = pd.DataFrame([], columns=['date', 'description', 'amount'])
 
-        return self.replace_index(data)
+        data['date'] = pd.to_datetime(data['date'])
+        return data
 
-    def download_transactions(self, user_id, table='transactions'):
-        return self.replace_index(pd.read_sql(
-            f'SELECT id, date, amount, category, description, balance FROM {self.schema}.{table} WHERE user_id = {user_id} AND is_del = False ORDER BY date',
-            self.connector))
+    def download_transactions(self, user_id):
+        return self.__read_sql('get_transactions', {'user_id': user_id})
 
     def add_transactions(self, data, user_id, table='transactions'):
         data = data[['date', 'amount', 'category',
@@ -115,9 +122,8 @@ class DB_Engine:
         data.to_sql(table, self.connector, schema=self.schema,
                     if_exists='append', index=False)
 
-    def download_last_model(self, user_id, table='sbs_models'):
-        df = pd.read_sql(
-            f'SELECT dump FROM {self.schema}.{table} WHERE user_id = {user_id} ORDER BY id DESC LIMIT 1', self.connector)
+    def download_last_model(self, user_id):
+        df = self.__read_sql('get_last_model', {'user_id': user_id})
         if df.empty:
             return None
 
@@ -134,23 +140,32 @@ class DB_Engine:
             'dump'
         ]).to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
 
-    def delete_transactions(self, user_id, start_date, end_date='end', table='transactions'):
+    def delete_transactions(self, user_id, start_date, end_date='end'):
         if end_date == 'end':
             time = f"date > '{start_date}'"
         else:
             time = f"date BETWEEN '{start_date}' AND '{end_date}'"
 
-        sql = f"UPDATE {self.schema}.{table} SET is_del = true WHERE user_id = {user_id} AND {time}"
-        result = self.connector.engine.execute(sql)
+        self.cursor.execute(self.sql_queries['delete_transactions'], {
+                            'user_id': user_id, 'time': time})
+        self.connector.commit()
 
-    def add_event(self, table, data):
-        result = self.connector.execute(self.sql_queries['add_'+table], data)
-        return result.first()[0]
+    def add_event(self, table: str, data: dict):
+        self.cursor.execute(self.sql_queries['add_'+table], data)
+        self.connector.commit()
+        return self.cursor.fetchone()[0]
 
     def delete_event(self, table, db_id):
-        self.connector.execute(
+        self.cursor.execute(
             self.sql_queries['delete_'+table], {'id': db_id})
+        self.connector.commit()
 
     def edit_event(self, table, db_id, column, value):
-        self.connector.execute(
-            self.sql_queries['update_'+table], {'id': db_id, 'column': column, 'value': value})
+        self.cursor.execute(
+            self.sql_queries['update_'+table], {'id': db_id, 'column': AsIs(column), 'value': value})
+        self.connector.commit()
+
+    def __read_sql(self, quory_name: str, values: dict):
+        return pd.read_sql(
+            self.cursor.mogrify(self.sql_queries[quory_name], values),
+            self.connector).reset_index().rename(columns={'id': 'db_id'})
