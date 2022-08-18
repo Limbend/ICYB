@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
-import psycopg2
-from psycopg2.sql import SQL, Identifier
-from psycopg2.extensions import AsIs
+# import psycopg2
+# from psycopg2.sql import SQL, Identifier
+# from psycopg2.extensions import AsIs
+import sqlalchemy as sqla
 import pickle
 import re
 from datetime import date, datetime
@@ -66,35 +67,88 @@ def ru_datetime_parser(string):
 
 
 class DB_Engine:
-    def __init__(self, host, port, user, password, dbname, schema):
-        self.connector = psycopg2.connect(
-            host=host, port=port, user=user, password=password, dbname=dbname)
-        self.cursor = self.connector.cursor()
+    def __init__(self, host, port, user, password, db_name, schema):
+        self.connector = sqla.create_engine(
+            f"postgresql://{user}:{password}@{host}:{port}/{db_name}")
         self.schema = schema
+        metadata_obj = sqla.MetaData()
 
-        self.sql_queries = {
-            'get_c_rules': SQL("SELECT key, value FROM {schema}.dictionary_categories WHERE user_id = %(user_id)s"),
-            'get_regular': SQL("SELECT id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue FROM {schema}.regular WHERE user_id = %(user_id)s AND is_del = False ORDER BY start_date"),
-            'get_onetime': SQL("SELECT id, date, description, amount FROM {schema}.onetime WHERE user_id = %(user_id)s AND is_del = False ORDER BY date"),
-            'get_transactions': SQL("SELECT id, date, amount, category, description, balance FROM {schema}.transactions WHERE user_id = %(user_id)s AND is_del = False ORDER BY date"),
-            'get_last_model': SQL("SELECT dump FROM {schema}.sbs_models WHERE user_id = %(user_id)s ORDER BY id DESC LIMIT 1"),
+        self.tables = {
+            'transactions': sqla.Table('transactions', metadata_obj,
+                                       sqla.Column('id', sqla.Integer,
+                                                   primary_key=True),
+                                       sqla.Column('user_id', sqla.Integer),
+                                       sqla.Column('date', sqla.Date),
+                                       sqla.Column('account_id', sqla.Integer),
+                                       sqla.Column('amount', sqla.Integer),
+                                       sqla.Column('category', sqla.String),
+                                       sqla.Column('description', sqla.String),
+                                       sqla.Column('balance', sqla.Integer),
+                                       sqla.Column('is_del', sqla.Boolean),
+                                       schema=self.schema
+                                       ),
+            'regular': sqla.Table('regular', metadata_obj,
+                                  sqla.Column('id', sqla.Integer,
+                                              primary_key=True),
+                                  sqla.Column('user_id', sqla.Integer),
+                                  sqla.Column('description', sqla.String),
+                                  sqla.Column('search_f', sqla.String),
+                                  sqla.Column('arg_sf', sqla.String),
+                                  sqla.Column('amount', sqla.Integer),
+                                  sqla.Column('start_date', sqla.Date),
+                                  sqla.Column('end_date', sqla.Date),
+                                  sqla.Column('d_years', sqla.Integer),
+                                  sqla.Column('d_months', sqla.Integer),
+                                  sqla.Column('d_days', sqla.Integer),
+                                  sqla.Column('adjust_price', sqla.Boolean),
+                                  sqla.Column('adjust_date', sqla.Boolean),
+                                  sqla.Column('follow_overdue', sqla.Boolean),
+                                  sqla.Column('is_del', sqla.Boolean),
+                                  schema=self.schema
+                                  ),
+            'onetime': sqla.Table('onetime', metadata_obj,
+                                  sqla.Column('id', sqla.Integer,
+                                              primary_key=True),
+                                  sqla.Column('user_id', sqla.Integer),
+                                  sqla.Column('description', sqla.String),
+                                  sqla.Column('amount', sqla.Integer),
+                                  sqla.Column('date', sqla.Date),
+                                  sqla.Column('is_del', sqla.Boolean),
+                                  schema=self.schema
+                                  ),
 
-            'add_regular': SQL(
-                "INSERT INTO {schema}.regular (user_id, description, search_f, arg_sf, amount, start_date, end_date, d_years, d_months, d_days, adjust_price, adjust_date, follow_overdue) " +
-                "VALUES (%(user_id)s, %(description)s, %(search_f)s, %(arg_sf)s, %(amount)s, %(start_date)s, %(end_date)s, %(d_years)s, %(d_months)s, %(d_days)s, %(adjust_price)s, %(adjust_date)s, %(follow_overdue)s) RETURNING id"),
-            'add_onetime': SQL("INSERT INTO {schema}.onetime (user_id, date, description, amount) VALUES (%(user_id)s, %(date)s, %(description)s, %(amount)s) RETURNING id"),
-
-            'delete_transactions': SQL("UPDATE {schema}.transactions SET is_del = true WHERE user_id = %(user_id)s AND %(time)s"),
-            'delete_regular': SQL("UPDATE {schema}.regular SET is_del = true WHERE id = %(id)s"),
-            'delete_onetime': SQL("UPDATE {schema}.onetime SET is_del = true WHERE id = %(id)s"),
-
-            'update_regular': SQL("UPDATE {schema}.regular SET %(column)s = %(value)s WHERE id = %(id)s"),
-            'update_onetime': SQL("UPDATE {schema}.onetime SET %(column)s = %(value)s WHERE id = %(id)s"),
         }
 
-        self.sql_queries = {key: self.sql_queries[key].format(
-            schema=Identifier(self.schema),
-        ) for key in self.sql_queries.keys()}
+        self.sql_queries = {
+            'get_c_rules': sqla.sql.text(f"SELECT key, value FROM {self.schema}.dictionary_categories WHERE user_id = :user_id"),
+            'get_last_model': sqla.sql.text(f"SELECT dump FROM {self.schema}.sbs_models WHERE user_id = :user_id ORDER BY id DESC LIMIT 1"),
+            'get_regular': self.tables['regular'].select().where(sqla.and_(
+                self.tables['regular'].c.user_id == sqla.bindparam('user_id'),
+                self.tables['regular'].c.is_del == False
+            )).order_by(self.tables['regular'].c.start_date),
+
+            'get_onetime': self.tables['onetime'].select().where(sqla.and_(
+                self.tables['onetime'].c.user_id == sqla.bindparam('user_id'),
+                self.tables['onetime'].c.is_del == False
+            )).order_by(self.tables['onetime'].c.date),
+
+            'get_transactions': self.tables['transactions'].select().where(sqla.and_(
+                self.tables['transactions'].c.user_id == sqla.bindparam(
+                    'user_id'),
+                self.tables['transactions'].c.is_del == False
+            )).order_by(self.tables['transactions'].c.date),
+
+            'add_regular': self.tables['regular'].insert().returning(self.tables['regular'].c.id),
+            'add_onetime': self.tables['onetime'].insert().returning(self.tables['onetime'].c.id),
+
+            'delete_transactions': self.tables['transactions'].update().where(self.tables['transactions'].c.user_id == sqla.bindparam('user_id')).values(is_del=True),
+            'delete_regular': self.tables['regular'].update().where(self.tables['regular'].c.id.in_(sqla.bindparam('db_id', expanding=True))).values(is_del=True),
+            'delete_onetime': self.tables['onetime'].update().where(self.tables['onetime'].c.id.in_(sqla.bindparam('db_id', expanding=True))).values(is_del=True),
+
+            'update_regular': self.tables['regular'].update().where(self.tables['regular'].c.id == sqla.bindparam('db_id')),
+            'update_onetime': self.tables['onetime'].update().where(self.tables['onetime'].c.id == sqla.bindparam('db_id')),
+
+        }
 
     def download_c_rules(self, user_id):
         return self.__read_sql('get_c_rules', {'user_id': user_id})[['key', 'value']].values.tolist()
@@ -103,11 +157,9 @@ class DB_Engine:
         return self.__read_sql('get_regular', {'user_id': user_id})
 
     def download_onetime(self, user_id):
-        data = self.__read_sql('get_onetime', {'user_id': user_id})
-        # if data.empty:
-        #     data = pd.DataFrame([], columns=['date', 'description', 'amount'])
-
-        data['date'] = pd.to_datetime(data['date'])
+        data = self.__read_sql(
+            'get_onetime', {'user_id': user_id}, parse_dates=['date'])
+        # data['date'] = pd.to_datetime(data['date'])
         return data
 
     def download_transactions(self, user_id):
@@ -141,31 +193,33 @@ class DB_Engine:
         ]).to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
 
     def delete_transactions(self, user_id, start_date, end_date='end'):
+        query = self.sql_queries['delete_transactions']
         if end_date == 'end':
-            time = f"date > '{start_date}'"
+            query = query.where(self.tables.c.date > start_date)
         else:
-            time = f"date BETWEEN '{start_date}' AND '{end_date}'"
+            query = query.where(
+                self.tables.c.date.between(start_date, end_date))
 
-        self.cursor.execute(self.sql_queries['delete_transactions'], {
-                            'user_id': user_id, 'time': time})
-        self.connector.commit()
+        self.connector.execute(self.sql_queries['delete_transactions'], {
+                               'user_id': user_id})
+        
 
     def add_event(self, table: str, data: dict):
-        self.cursor.execute(self.sql_queries['add_'+table], data)
-        self.connector.commit()
-        return self.cursor.fetchone()[0]
+        result = self.connector.execute(self.sql_queries['add_'+table], data)
+        return result.first()[0]
 
     def delete_event(self, table, db_id):
-        self.cursor.execute(
-            self.sql_queries['delete_'+table], {'id': db_id})
-        self.connector.commit()
+        self.connector.execute(
+            self.sql_queries['delete_'+table], {'db_id': db_id})
 
     def edit_event(self, table, db_id, column, value):
-        self.cursor.execute(
-            self.sql_queries['update_'+table], {'id': db_id, 'column': AsIs(column), 'value': value})
-        self.connector.commit()
+        self.connector.execute(
+            self.sql_queries['update_'+table], {'db_id': db_id, column: value})
 
-    def __read_sql(self, quory_name: str, values: dict):
+    def __read_sql(self, quory_name: str, values: dict, parse_dates=None):
         return pd.read_sql(
-            self.cursor.mogrify(self.sql_queries[quory_name], values),
-            self.connector).reset_index().rename(columns={'id': 'db_id'})
+            sql=self.sql_queries[quory_name],
+            con=self.connector,
+            params=values,
+            parse_dates=parse_dates
+        ).reset_index().rename(columns={'id': 'db_id'})

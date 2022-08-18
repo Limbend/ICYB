@@ -99,9 +99,9 @@ class BotDialogRegular(BotDialog):
             self.reply_help(update, 'add')
             return
 
-        description = cmd[2]
+        amount = dl.amount_parser(cmd[2])
 
-        amount = dl.amount_parser(cmd[3])
+        description = cmd[3]
 
         if len(cmd) >= 6:
             search_f = cmd[4]
@@ -146,8 +146,6 @@ class BotDialogRegular(BotDialog):
 
         elif len(cmd) == 2:
             self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
-
-            # message.edit_text(query.data)
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine):
         command = shlex.split(update.message.text)
