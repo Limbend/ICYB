@@ -69,3 +69,17 @@ CREATE TABLE IF NOT EXISTS icyb.sbs_models (
 
 ALTER TABLE
     IF EXISTS icyb.sbs_models OWNER to postgres;
+
+
+CREATE TABLE IF NOT EXISTS icyb.accounts (
+    id serial NOT NULL,
+    user_id integer NOT NULL,
+    type smallint NOT NULL,
+    description character varying(25) COLLATE,
+    credit_limit money,
+    discharge_date date,
+    PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
+ALTER TABLE
+    IF EXISTS icyb.accounts OWNER to postgres;

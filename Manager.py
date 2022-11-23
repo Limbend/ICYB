@@ -16,12 +16,33 @@ class BotDialog:
     def is_suitable(self, cmd):
         if self.cmd_mask is None:
             return False
+
+        if type(self.cmd_mask) is list:
+            return cmd in self.cmd_mask
+
         return cmd == self.cmd_mask
 
-    def reply_help(self, update: Update, cmd):
+    def get_cmd_mask(self):
+        if type(self.cmd_mask) is list:
+            return self.cmd_mask[0]
+        else:
+            return self.cmd_mask
+
+    def reply_help(self, update: Update, cmd, **kwargs):
+        text = Visual.reply_help(' '.join([self.get_cmd_mask(), cmd]))
+
         update.message.reply_text(
-            text=Visual.reply_help(' '.join([self.cmd_mask, cmd])),
-            quote=True, parse_mode='html')
+            text=text, quote=True, parse_mode='html', **kwargs)
+
+    def reply_error(self, update: Update, path, error_message, **kwargs):
+        if path == '':
+            text = f'{self.get_cmd_mask()}: {error_message}'
+        else:
+            text = f'{self.get_cmd_mask()} {path}: {error_message}'
+        text = Visual.reply_error(text)
+
+        update.message.reply_text(
+            text=text, quote=True, parse_mode='html', **kwargs)
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine):
         update.message.reply_text(
@@ -195,7 +216,7 @@ class BotDialogRegular(BotDialog):
 
     def __get_edit_menu(self, id_event, n_cols=2):
         keyboard_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton(name, callback_data=f'{self.cmd_mask},edit,{id_event},{name}')
+            [InlineKeyboardButton(name, callback_data=f'{self.get_cmd_mask()},edit,{id_event},{name}')
                 for name in self.parameters.keys()][i:i + n_cols]
             for i in range(0, len(self.parameters.keys()), n_cols)])
 
@@ -208,7 +229,7 @@ class BotDialogRegular(BotDialog):
         self.is_wait_answer = True
 
         keyboard_markup = InlineKeyboardMarkup([[InlineKeyboardButton(
-            'Назад', callback_data=f'{self.cmd_mask},edit,{id_event}')]])
+            'Назад', callback_data=f'{self.get_cmd_mask()},edit,{id_event}')]])
 
         # if hasattr(update, 'callback_query'):
         if not update.callback_query is None:
@@ -276,6 +297,134 @@ class BotDialogOnetime(BotDialogRegular):
         self.reply_table(update)
 
 
+class BotDialogAccount(BotDialogOnetime):
+    def __init__(self, user):
+        BotDialog.__init__(self, user)
+        self.cmd_mask = '/account'
+
+        self.parameters = {
+            'type': 'Тип счета\n0 для дебетового и 1 для кредитного',
+            'description': 'Название\nМаксимум 25 символов',
+            'credit_limit': 'Кредитный лимит\nВ формате: 1000.00',
+            'discharge_date': 'Дата выписки\nВ формате: 30.12.2200',
+        }
+
+    def reply_table(self, update: Update, columns=['type', 'description', 'credit_limit', 'discharge_date']):
+        update.message.reply_text(
+            text=Visual.show_accounts(
+                self.user.accounts, columns),
+            quote=False, parse_mode='html')
+
+    def reply_row(self, update: Update, index, columns=['type', 'description', 'credit_limit', 'discharge_date']):
+        update.message.reply_text(
+            text=Visual.show_accounts(
+                self.user.onetime_transactions, columns, index),
+            quote=False, parse_mode='html')
+
+    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
+        pass
+        if len(cmd) == 1 and cmd[0] == 'help':
+            self.reply_help(update, 'add')
+            return
+        if len(cmd) == 0:
+            self.__set_account_description(update)
+        if len(cmd) == 1:
+            self.__set_account_type(update, cmd)
+        if len(cmd) == 2:
+            pass
+
+    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+        pass
+        # if len(cmd) < 1 or cmd[0] == 'help':
+        #     self.reply_help(update, 'del')
+        #     return
+        # self.user.delete_onetime(
+        #     db_engine, [int(s) for s in cmd[0].split(',')])
+        # self.reply_table(update)
+
+    def __set_account_description(self, update: Update):
+        names = ['Основной', 'Кредитка']
+        keyboard_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(name, callback_data=f'{self.get_cmd_mask()},add,{name}') for name in names]])
+
+        self.wait_answer_func = self.reply_add
+        self.is_wait_answer = True
+
+        self.reply_error(update, 'add', 'description empty',
+                         reply_markup=keyboard_markup)
+
+    def __set_account_type(self, update: Update, cmd):
+        types = ['debit', 'credit']
+        keyboard_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(t, callback_data=f'{self.get_cmd_mask()},add,{cmd},{t}') for t in types]])
+
+        self.reply_error(update, 'add', 'type empty',
+                         reply_markup=keyboard_markup)
+
+
+class BotDialogTransactions(BotDialog):
+    def __init__(self, user):
+        BotDialog.__init__(self, user)
+        self.cmd_mask = ['/transactions', '/tr']
+
+    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
+        if len(self.user.accounts) == 0:
+            keyboard_markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton('Создать счет', callback_data='/account,add')]])
+            self.reply_error(update, 'add', 'account empty',
+                             reply_markup=keyboard_markup)
+
+        else:
+            # file_received = update.message.reply_to_message.document
+            # new_balance = cmd[0]
+            # or len(cmd)<0
+
+            # keyboard_markup = InlineKeyboardMarkup([
+            #     [InlineKeyboardButton(
+            #         name, callback_data=f'{self.get_cmd_mask()},add,{new_balance},{name}') for name in self.user.accounts['description']]
+            # ])
+
+            # if not update.callback_query is None:
+            #     update.callback_query.message.edit_text(
+            #         text=f'Выберите счет', reply_markup=keyboard_markup)
+
+            # else:
+            #     raise Exception(
+            #         f"The {update.__class__} does not have an atrebut 'callback_query'. The algorithm without a keyboard has not yet been implemente")
+
+            pass
+
+    def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
+        cmd = update.callback_query.data
+        if self.is_wait_answer:
+            self.is_wait_answer = False
+            self.wait_answer_func(update, cmd, db_engine,
+                                  **self.wait_answer_kwargs)
+
+    def __choice_account(self, update: Update, cmd: list, db_engine: dl.DB_Engine, file):
+        new_balance = cmd[0]
+        path = './temp/' + file
+        transactions = self.user.load_from_file(
+            db_engine, path, dl.amount_parser(new_balance))
+        comparison_data = self.user.get_comparison_data()
+
+        update.message.reply_text(
+            text=Visual.successful_adding_transactions(transactions), quote=True)
+        update.message.reply_photo(
+            photo=Visual.comparison_plot(comparison_data), quote=False)
+
+    def new_message(self, update: Update, db_engine: dl.DB_Engine):
+        command = shlex.split(update.message.text)
+        if command[0][0] != '/' and self.is_wait_answer:
+            self.is_wait_answer = False
+            self.wait_answer_func(
+                update, command, db_engine, **self.wait_answer_kwargs)
+        if len(command) > 1:
+            if command[1] == 'add':
+                self.reply_add(update, command[2:], db_engine)
+                return
+
+
 class UserManager:
     '''Класс для управления пользователями.
 
@@ -292,7 +441,7 @@ class UserManager:
         self.bot_dialog_dict = {}
 
     def get_user(self, user_id):
-        '''Ищет и возвращает объект пользователя по его id 
+        '''Ищет и возвращает объект пользователя по его id
 
         Args:
             user_id: id пользователя.
@@ -330,31 +479,6 @@ class UserManager:
 
         return bot_dialog
 
-    def load_from_file(self, user_id, file_full_name, new_balance):
-        '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
-
-        Args:
-            user_id: id пользователя.
-            file_full_name: полное имя файла.
-            new_balance: текущий баланс пользователя, после последней операции в файле.
-
-        Returns:
-            {
-                'plot': Сравнительный график прогноза с фактическим изменением баланса.
-                'message': Ответное сообщение об успешном добавлении данных.
-            }
-        '''
-        user = self.get_user(user_id)
-
-        transactions = user.load_from_file(
-            self.db_engine, file_full_name, dl.amount_parser(new_balance))
-        comparison_data = user.get_comparison_data()
-
-        return {
-            'plot': Visual.comparison_plot(comparison_data),
-            'message': Visual.successful_adding_transactions(transactions)
-        }
-
     def predict_events(self, user_id, end_date):
         '''Прогнозирует регулярные и одноразовые транзакции для пользователя.
 
@@ -365,8 +489,7 @@ class UserManager:
         Returns:
             Датафрейм транзакций с колонками ['amount', 'category', 'description', 'balance']
         '''
-        # return self.get_user(user_id).predict_events(datetime.today(), end_date)
-        return self.get_user(user_id).predict_events(datetime(2022, 8, 2), end_date)
+        return self.get_user(user_id).predict_events(datetime.today(), end_date)
 
     def predict_full(self, user_id, end_date):
         '''Прогнозирует транзакции для пользователя. Регулярные и предсказанные транзакции складываются.
@@ -407,8 +530,7 @@ class UserManager:
                 'message': Список регулярных транзакций и средние расходы в день.
             }
         '''
-        events = self.predict_events(user_id, end_date).set_index('date')[
-            ['amount', 'description']]
+        events = self.predict_events(user_id, end_date).set_index('date')
 
         full_transactions = self.predict_full(user_id, end_date)
 
@@ -441,5 +563,7 @@ class UserManager:
             return BotDialogRegular(user)
         elif cmd == '/onetime':
             return BotDialogOnetime(user)
+        elif cmd in ['/transaction', '/tr']:
+            return BotDialogTransactions(user)
 
         return BotDialog(user)

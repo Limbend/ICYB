@@ -38,20 +38,6 @@ def reset(update: Update, context: CallbackContext) -> None:
         manager = UserManager(settings['db_connector'])
 
 
-def download_file(update: Update, context: CallbackContext) -> None:
-    balance = ' '.join(context.args[0:])
-    user_id = update.message.from_user.id
-
-    file_received = update.message.reply_to_message.document
-    file_received.get_file().download(
-        custom_path='./temp/' + file_received.file_name)
-    report_obj = manager.load_from_file(user_id, './temp/' +
-                                        file_received.file_name, balance)
-
-    update.message.reply_text(text=report_obj['message'], quote=True)
-    update.message.reply_photo(photo=report_obj['plot'], quote=False)
-
-
 def forecast(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
 
@@ -96,10 +82,9 @@ updater = Updater(settings[L_TYPE+'-bot_token'])
 updater.dispatcher.add_handler(CommandHandler('pred', forecast))
 updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('reset', reset))
-updater.dispatcher.add_handler(CommandHandler('file', download_file))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
 updater.dispatcher.add_handler(
-    CommandHandler(['regular', 'onetime'], bot_dialog))
+    CommandHandler(['regular', 'onetime', 'transactions', 'tr'], bot_dialog))
 updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
 updater.dispatcher.add_handler(CallbackQueryHandler(keyboard_callback))
 

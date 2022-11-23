@@ -33,6 +33,7 @@ class User:
         self.sbs_model = db_engine.download_last_model(self.id)
         self.regular_list = db_engine.download_regular(self.id)
         self.onetime_transactions = db_engine.download_onetime(self.id)
+        self.accounts = db_engine.download_accounts(self.id)
 
     def load_from_file(self, db_engine, file_full_name, new_balance):
         '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
@@ -226,6 +227,28 @@ class User:
 
         self.onetime_transactions = onetime_transactions
 
+    def add_account(self, db_engine, date, amount, description):
+        '''Добавляет счет.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            date: дата транзакции.
+            amount: сумма транзакции.
+            description: описание транзакции.
+        '''
+        new_row = {'user_id': self.id, 'description': description,
+                   'amount': amount, 'date': date}
+        db_index = db_engine.add_event('onetime', new_row)
+        new_row['db_id'] = db_index
+        del new_row['user_id']
+
+        onetime_transactions = pd.concat([
+            self.onetime_transactions,
+            pd.DataFrame([new_row])
+        ], axis=0).reset_index(drop=True)
+
+        self.onetime_transactions = onetime_transactions
+
     def delete_regular(self, db_engine, id):
         '''Удаляет регулярное событие.
 
@@ -260,9 +283,6 @@ class User:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
         '''
-        # !!! Добавить возможность массвого изменения
-        # db_id = tuple(
-        #     str(i) for i in self.regular_list.loc[id, 'db_id'].values)
         db_id = str(self.regular_list.loc[id, 'db_id'])
         db_engine.edit_event('regular', db_id, parameter, new_value)
 
@@ -320,7 +340,6 @@ class User:
                 new_start = r_event['start_date'] + d_date * j
 
             # Проверка на просрочку
-            # j -= 1 # !!!
             if(r_event['follow_overdue'] and j > 0):
                 pay_date_overdue = g_start_date + relativedelta(days=1)
 
@@ -337,9 +356,6 @@ class User:
                 else:
                     # Посчитать сколько должно быть регулярок между стартовой датой r_event['start_date'] и начальной датой поиска g_start_date.
                     # Вычесть из них сколько по факту было.
-
-                    # count_overdue = j - sum(self.__get_markers_regular(
-                    #     self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1 # !!!
                     count_overdue = j - sum(self.__get_markers_regular(
                         self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event))
                     # Если число положительное, то есть просрочки.

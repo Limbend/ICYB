@@ -1,4 +1,4 @@
-import numpy as np
+# import numpy as np
 import pandas as pd
 # import psycopg2
 # from psycopg2.sql import SQL, Identifier
@@ -80,7 +80,7 @@ class DB_Engine:
                                        sqla.Column('user_id', sqla.Integer),
                                        sqla.Column('date', sqla.Date),
                                        sqla.Column('account_id', sqla.Integer),
-                                       sqla.Column('amount', sqla.Integer),
+                                       sqla.Column('amount', sqla.Numeric),
                                        sqla.Column('category', sqla.String),
                                        sqla.Column('description', sqla.String),
                                        sqla.Column('balance', sqla.Integer),
@@ -94,7 +94,7 @@ class DB_Engine:
                                   sqla.Column('description', sqla.String),
                                   sqla.Column('search_f', sqla.String),
                                   sqla.Column('arg_sf', sqla.String),
-                                  sqla.Column('amount', sqla.Integer),
+                                  sqla.Column('amount', sqla.Numeric),
                                   sqla.Column('start_date', sqla.Date),
                                   sqla.Column('end_date', sqla.Date),
                                   sqla.Column('d_years', sqla.Integer),
@@ -111,11 +111,21 @@ class DB_Engine:
                                               primary_key=True),
                                   sqla.Column('user_id', sqla.Integer),
                                   sqla.Column('description', sqla.String),
-                                  sqla.Column('amount', sqla.Integer),
+                                  sqla.Column('amount', sqla.Numeric),
                                   sqla.Column('date', sqla.Date),
                                   sqla.Column('is_del', sqla.Boolean),
                                   schema=self.schema
                                   ),
+            'accounts': sqla.Table('accounts', metadata_obj,
+                                   sqla.Column('id', sqla.Integer,
+                                               primary_key=True),
+                                   sqla.Column('user_id', sqla.Integer),
+                                   sqla.Column('type', sqla.SmallInteger),
+                                   sqla.Column('description', sqla.String),
+                                   sqla.Column('credit_limit', sqla.Numeric),
+                                   sqla.Column('discharge_date', sqla.Date),
+                                   schema=self.schema
+                                   ),
 
         }
 
@@ -131,6 +141,10 @@ class DB_Engine:
                 self.tables['onetime'].c.user_id == sqla.bindparam('user_id'),
                 self.tables['onetime'].c.is_del == False
             )).order_by(self.tables['onetime'].c.date),
+
+            'get_accounts': self.tables['accounts'].select().where(
+                self.tables['accounts'].c.user_id == sqla.bindparam('user_id')
+            ).order_by(self.tables['accounts'].c.id),
 
             'get_transactions': self.tables['transactions'].select().where(sqla.and_(
                 self.tables['transactions'].c.user_id == sqla.bindparam(
@@ -160,6 +174,11 @@ class DB_Engine:
         data = self.__read_sql(
             'get_onetime', {'user_id': user_id}, parse_dates=['date'])
         # data['date'] = pd.to_datetime(data['date'])
+        return data
+
+    def download_accounts(self, user_id):
+        data = self.__read_sql(
+            'get_accounts', {'user_id': user_id}, parse_dates=['discharge_date'])
         return data
 
     def download_transactions(self, user_id):
@@ -202,7 +221,6 @@ class DB_Engine:
 
         self.connector.execute(self.sql_queries['delete_transactions'], {
                                'user_id': user_id})
-        
 
     def add_event(self, table: str, data: dict):
         result = self.connector.execute(self.sql_queries['add_'+table], data)

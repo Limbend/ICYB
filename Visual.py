@@ -1,3 +1,4 @@
+from typing import overload
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.dates import DateFormatter
@@ -96,7 +97,7 @@ def show_row(data, index, columns):
 def show_events(events):
     result = events.copy()
     result.index = result.index.strftime('%d.%m.%Y')
-    return 'Регулярные транзакции\n        ' + show_table(result, columns=list(result))
+    return 'Регулярные транзакции\n        ' + show_table(result, columns=['amount', 'description'])
 
 
 def show_regular(regular, only_relevant, columns, index=None):
@@ -119,13 +120,22 @@ def show_onetime(onetime, only_relevant, columns, index=None):
     else:
         return f'Разовая транзакция\n\n        ' + show_row(result, index, columns)
 
+def show_accounts(accounts, columns, index=None):
+    if index is None:
+        return 'Счета\n        ' + show_table(accounts, columns)
+    else:
+        return f'Счет\n\n        ' + show_row(accounts, index, columns)
+
 
 def successful_adding_transactions(transactions):
     return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРазница прогноза и фактического баланса:"
 
 
 def predict_info(events, predicted_transactions):
-    table = show_events(events)
+    data = events.copy()
+    data.loc[data['is_overdue'], 'description'] = data.loc[data['is_overdue'],
+                                                           'description'] + ' \u2757'  # ❗
+    table = show_events(data)
     return table + f"\n\n\nДополнительно к этим транзакциям, средний расход в день составляет: {predicted_transactions['amount'].mean():.2f}"
 
 
@@ -141,3 +151,14 @@ HELP_MESSAGE = {
 
 def reply_help(cmd):
     return HELP_MESSAGE.get(cmd, f'!!! default help message for {cmd}')
+
+
+ERROR_MESSAGE = {
+    '/transactions add: account empty': 'Похоже у вас нет ни одного счета. Чтобы создать новый введите комманду <code>/account add</code> или нажмите на кнопку ниже.',
+    '/account add: description empty': 'Напишите название для нового счета или выберете из представленных ниже.',
+    '/account add: type empty': 'Выберете тип счета.'
+}
+
+
+def reply_error(cmd):
+    return ERROR_MESSAGE.get(cmd, f'!!! default error message for {cmd}')
