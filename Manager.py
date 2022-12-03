@@ -28,26 +28,47 @@ class BotDialog:
         else:
             return self.cmd_mask
 
-    def reply_help(self, update: Update, cmd, **kwargs):
+    def reply_help(self, update: Update, cmd, edit_text=False, **kwargs):
         text = Visual.reply_help(' '.join([self.get_cmd_mask(), cmd]))
 
-        update.message.reply_text(
-            text=text, quote=True, parse_mode='html', **kwargs)
+        if edit_text:
+            update.callback_query.message.edit_text(
+                text=text, parse_mode='html', **kwargs)
+        else:
+            update.message.reply_text(
+                text=text, quote=True, parse_mode='html', **kwargs)
 
-    def reply_error(self, update: Update, path, error_message, **kwargs):
+    def reply_error(self, update: Update, path, error_message, edit_text=False, **kwargs):
         if path == '':
             text = f'{self.get_cmd_mask()}: {error_message}'
         else:
             text = f'{self.get_cmd_mask()} {path}: {error_message}'
         text = Visual.reply_error(text)
 
-        update.message.reply_text(
-            text=text, quote=True, parse_mode='html', **kwargs)
+        if edit_text:
+            update.callback_query.message.edit_text(
+                text=text, parse_mode='html', **kwargs)
+        else:
+            update.message.reply_text(
+                text=text, quote=True, parse_mode='html', **kwargs)
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine):
-        update.message.reply_text(
-            text='!!! Стандартный ответ',
-            quote=False)
+    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+        if command == '':
+            command = shlex.split(update.message.text)
+
+        if command[0][0] != '/' and self.is_wait_answer:
+            self.is_wait_answer = False
+            if 'prefix_command' in self.wait_answer_kwargs:
+                command = self.wait_answer_kwargs.pop(
+                    'prefix_command') + command
+            self.wait_answer_func(
+                update, command, db_engine, **self.wait_answer_kwargs)
+
+    def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
+        cmd = update.callback_query.data.split(',')
+        if cmd[0][0] == '/':
+            update.message = update.effective_message
+            self.new_message(update, db_engine, cmd)
 
 
 class BotDialogRegular(BotDialog):
@@ -168,12 +189,11 @@ class BotDialogRegular(BotDialog):
         elif len(cmd) == 2:
             self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine):
-        command = shlex.split(update.message.text)
-        if command[0][0] != '/' and self.is_wait_answer:
-            self.is_wait_answer = False
-            self.wait_answer_func(
-                update, command, db_engine, **self.wait_answer_kwargs)
+    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+        if command == '':
+            command = shlex.split(update.message.text)
+        BotDialog.new_message(self, update, db_engine, command)
+
         if len(command) > 1:
             if command[1] == 'show':
                 if len(command) == 3:
@@ -204,15 +224,15 @@ class BotDialogRegular(BotDialog):
             self.reply_table(update)
             return
 
-    def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
-        cmd = update.callback_query.data.split(',')
-        if cmd[1] == 'edit':
-            self.reply_edit(update, cmd[2:], db_engine,
-                            message=update.callback_query.message)
+    # def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
+    #     cmd = update.callback_query.data.split(',')
+    #     if cmd[1] == 'edit':
+    #         self.reply_edit(update, cmd[2:], db_engine,
+    #                         message=update.callback_query.message)
 
-        else:
-            raise Exception(
-                f"{__class__} does not implement the processing of the '{cmd[1]}' command received from the keyboard.")
+    #     else:
+    #         raise Exception(
+    #             f"{__class__} does not implement the processing of the '{cmd[1]}' command received from the keyboard.")
 
     def __get_edit_menu(self, id_event, n_cols=2):
         keyboard_markup = InlineKeyboardMarkup([
@@ -297,41 +317,47 @@ class BotDialogOnetime(BotDialogRegular):
         self.reply_table(update)
 
 
-class BotDialogAccount(BotDialogOnetime):
+class BotDialogAccounts(BotDialogOnetime):
     def __init__(self, user):
         BotDialog.__init__(self, user)
-        self.cmd_mask = '/account'
+        self.cmd_mask = '/accounts'
 
         self.parameters = {
             'type': 'Тип счета\n0 для дебетового и 1 для кредитного',
             'description': 'Название\nМаксимум 25 символов',
             'credit_limit': 'Кредитный лимит\nВ формате: 1000.00',
-            'discharge_date': 'Дата выписки\nВ формате: 30.12.2200',
+            'discharge_day': 'День выписки\nЦелое число',
         }
 
-    def reply_table(self, update: Update, columns=['type', 'description', 'credit_limit', 'discharge_date']):
+    def reply_table(self, update: Update, columns=['type', 'description', 'credit_limit', 'discharge_day']):
         update.message.reply_text(
             text=Visual.show_accounts(
                 self.user.accounts, columns),
             quote=False, parse_mode='html')
 
-    def reply_row(self, update: Update, index, columns=['type', 'description', 'credit_limit', 'discharge_date']):
+    def reply_row(self, update: Update, index, columns=['type', 'description', 'credit_limit', 'discharge_day']):
         update.message.reply_text(
             text=Visual.show_accounts(
                 self.user.onetime_transactions, columns, index),
             quote=False, parse_mode='html')
 
     def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
-        pass
         if len(cmd) == 1 and cmd[0] == 'help':
             self.reply_help(update, 'add')
-            return
-        if len(cmd) == 0:
+        elif len(cmd) == 0:
             self.__set_account_description(update)
-        if len(cmd) == 1:
-            self.__set_account_type(update, cmd)
-        if len(cmd) == 2:
-            pass
+        elif len(cmd) == 1:
+            self.__set_account_type(update, cmd[0])
+        elif len(cmd) == 2 and cmd[1] == 'debit':
+            self.user.add_accounts(
+                db_engine, account_type=1, description=cmd[0])
+        elif len(cmd) == 2 and cmd[1] == 'credit':
+            self.__set_credit_limit(update, cmd[0])
+        elif len(cmd) == 3 and cmd[1] == 'credit':
+            self.__set_discharge_day(update, cmd[0], cmd[2])
+        elif len(cmd) == 4 and cmd[1] == 'credit':
+            self.user.add_accounts(
+                db_engine, account_type=2, description=cmd[0], credit_limit=cmd[2], discharge_day=cmd[3])
 
     def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
         pass
@@ -350,16 +376,33 @@ class BotDialogAccount(BotDialogOnetime):
         self.wait_answer_func = self.reply_add
         self.is_wait_answer = True
 
+        edit_text = not update.callback_query is None
         self.reply_error(update, 'add', 'description empty',
-                         reply_markup=keyboard_markup)
+                         edit_text, reply_markup=keyboard_markup)
 
-    def __set_account_type(self, update: Update, cmd):
+    def __set_account_type(self, update: Update, description):
         types = ['debit', 'credit']
         keyboard_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(t, callback_data=f'{self.get_cmd_mask()},add,{cmd},{t}') for t in types]])
+            [[InlineKeyboardButton(t, callback_data=f'{self.get_cmd_mask()},add,{description},{t}') for t in types]])
 
+        edit_text = not update.callback_query is None
         self.reply_error(update, 'add', 'type empty',
-                         reply_markup=keyboard_markup)
+                         edit_text, reply_markup=keyboard_markup)
+
+    def __set_credit_limit(self, update: Update, description):
+        self.is_wait_answer = True
+        self.wait_answer_func = self.reply_add
+        self.wait_answer_kwargs = {'prefix_command': [description, 'credit']}
+
+        self.reply_error(update, 'add', 'credit_limit empty')
+
+    def __set_discharge_day(self, update: Update, description, credit_limit):
+        self.is_wait_answer = True
+        self.wait_answer_func = self.reply_add
+        self.wait_answer_kwargs = {'prefix_command': [
+            description, 'credit', credit_limit]}
+
+        self.reply_error(update, 'add', 'discharge_day empty')
 
 
 class BotDialogTransactions(BotDialog):
@@ -370,40 +413,48 @@ class BotDialogTransactions(BotDialog):
     def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(self.user.accounts) == 0:
             keyboard_markup = InlineKeyboardMarkup(
-                [[InlineKeyboardButton('Создать счет', callback_data='/account,add')]])
-            self.reply_error(update, 'add', 'account empty',
+                [[InlineKeyboardButton('Создать счет', callback_data='/accounts,add')]])
+            self.reply_error(update, 'add', 'accounts empty',
                              reply_markup=keyboard_markup)
+            return
 
+        if not update.message.reply_to_message is None and not update.message.reply_to_message.document is None:
+            file_received = update.message.reply_to_message.document
+        elif not update.message.document is None:
+            file_received = update.message.document
         else:
-            # file_received = update.message.reply_to_message.document
-            # new_balance = cmd[0]
-            # or len(cmd)<0
+            self.reply_error(update, 'add', 'file empty')
+            return
 
-            # keyboard_markup = InlineKeyboardMarkup([
-            #     [InlineKeyboardButton(
-            #         name, callback_data=f'{self.get_cmd_mask()},add,{new_balance},{name}') for name in self.user.accounts['description']]
-            # ])
+        if len(cmd)<1:
+            self.reply_error(update, 'add', 'balance empty')
+            return
 
-            # if not update.callback_query is None:
-            #     update.callback_query.message.edit_text(
-            #         text=f'Выберите счет', reply_markup=keyboard_markup)
-
-            # else:
-            #     raise Exception(
-            #         f"The {update.__class__} does not have an atrebut 'callback_query'. The algorithm without a keyboard has not yet been implemente")
-
-            pass
-
-    def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
-        cmd = update.callback_query.data
-        if self.is_wait_answer:
-            self.is_wait_answer = False
-            self.wait_answer_func(update, cmd, db_engine,
-                                  **self.wait_answer_kwargs)
-
-    def __choice_account(self, update: Update, cmd: list, db_engine: dl.DB_Engine, file):
         new_balance = cmd[0]
-        path = './temp/' + file
+
+        if len(cmd)<2:
+            keyboard_markup = InlineKeyboardMarkup(
+                [[[InlineKeyboardButton(account_name, callback_data=f'{self.get_cmd_mask()},add,{new_balance},{account_name}')] for account_name in self.user.accounts['description']]])
+            self.reply_error(update, 'add', 'account not selected',
+                             reply_markup=keyboard_markup)
+            return
+
+        account = self.user.accounts['description']==cmd[1]
+        if account.any():
+            account_id = self.user.accounts.loc[account, 'id_db'].value[0]
+        else:
+            account = self.user.accounts['id']==cmd[1]
+            if account.any():
+                account_id = self.user.accounts.loc[account, 'id_db'].value[0]
+            else:
+                keyboard_markup = InlineKeyboardMarkup(
+                    [[[InlineKeyboardButton(account_name, callback_data=f'{self.get_cmd_mask()},add,{new_balance},{account_name}')] for account_name in self.user.accounts['description']]])
+                self.reply_error(update, 'add', 'account not found',
+                                reply_markup=keyboard_markup)
+                return
+
+        
+        path = './temp/' + file_received.file_name
         transactions = self.user.load_from_file(
             db_engine, path, dl.amount_parser(new_balance))
         comparison_data = self.user.get_comparison_data()
@@ -413,8 +464,10 @@ class BotDialogTransactions(BotDialog):
         update.message.reply_photo(
             photo=Visual.comparison_plot(comparison_data), quote=False)
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine):
-        command = shlex.split(update.message.text)
+
+    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+        if command == '':
+            command = shlex.split(update.message.text)
         if command[0][0] != '/' and self.is_wait_answer:
             self.is_wait_answer = False
             self.wait_answer_func(
@@ -565,5 +618,7 @@ class UserManager:
             return BotDialogOnetime(user)
         elif cmd in ['/transaction', '/tr']:
             return BotDialogTransactions(user)
+        elif cmd == '/accounts':
+            return BotDialogAccounts(user)
 
         return BotDialog(user)

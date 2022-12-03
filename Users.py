@@ -227,27 +227,31 @@ class User:
 
         self.onetime_transactions = onetime_transactions
 
-    def add_account(self, db_engine, date, amount, description):
+    def add_accounts(self, db_engine, account_type, description, credit_limit=0, discharge_day=0):
         '''Добавляет счет.
 
         Args:
             db_engine: объект для работы с базой данных.
-            date: дата транзакции.
-            amount: сумма транзакции.
-            description: описание транзакции.
+            account_type: тип счета.
+            description: описание счета.
+            credit_limit: Кредитный лимит.
+            discharge_day: День выписки.
         '''
-        new_row = {'user_id': self.id, 'description': description,
-                   'amount': amount, 'date': date}
-        db_index = db_engine.add_event('onetime', new_row)
+        if account_type == 1:
+            new_row = {'user_id': self.id, 'type': account_type, 'description': description}
+        if account_type == 2:
+            new_row = {'user_id': self.id, 'type': account_type, 'description': description, 'credit_limit': credit_limit, 'discharge_day': discharge_day}
+        
+        db_index = db_engine.add_event('accounts', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
 
-        onetime_transactions = pd.concat([
-            self.onetime_transactions,
+        accounts = pd.concat([
+            self.accounts,
             pd.DataFrame([new_row])
         ], axis=0).reset_index(drop=True)
 
-        self.onetime_transactions = onetime_transactions
+        self.accounts = accounts
 
     def delete_regular(self, db_engine, id):
         '''Удаляет регулярное событие.

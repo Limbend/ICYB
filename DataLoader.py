@@ -123,7 +123,7 @@ class DB_Engine:
                                    sqla.Column('type', sqla.SmallInteger),
                                    sqla.Column('description', sqla.String),
                                    sqla.Column('credit_limit', sqla.Numeric),
-                                   sqla.Column('discharge_date', sqla.Date),
+                                   sqla.Column('discharge_day', sqla.SmallInteger),
                                    schema=self.schema
                                    ),
 
@@ -154,6 +154,7 @@ class DB_Engine:
 
             'add_regular': self.tables['regular'].insert().returning(self.tables['regular'].c.id),
             'add_onetime': self.tables['onetime'].insert().returning(self.tables['onetime'].c.id),
+            'add_accounts': self.tables['accounts'].insert().returning(self.tables['accounts'].c.id),
 
             'delete_transactions': self.tables['transactions'].update().where(self.tables['transactions'].c.user_id == sqla.bindparam('user_id')).values(is_del=True),
             'delete_regular': self.tables['regular'].update().where(self.tables['regular'].c.id.in_(sqla.bindparam('db_id', expanding=True))).values(is_del=True),
@@ -178,7 +179,7 @@ class DB_Engine:
 
     def download_accounts(self, user_id):
         data = self.__read_sql(
-            'get_accounts', {'user_id': user_id}, parse_dates=['discharge_date'])
+            'get_accounts', {'user_id': user_id})
         return data
 
     def download_transactions(self, user_id):

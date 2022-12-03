@@ -84,7 +84,7 @@ updater.dispatcher.add_handler(CommandHandler('ping', ping))
 updater.dispatcher.add_handler(CommandHandler('reset', reset))
 updater.dispatcher.add_handler(CommandHandler('refit', refit))
 updater.dispatcher.add_handler(
-    CommandHandler(['regular', 'onetime', 'transactions', 'tr'], bot_dialog))
+    CommandHandler(['regular', 'onetime', 'accounts', 'transactions', 'tr'], bot_dialog))
 updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
 updater.dispatcher.add_handler(CallbackQueryHandler(keyboard_callback))
 

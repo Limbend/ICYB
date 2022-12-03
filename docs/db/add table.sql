@@ -76,8 +76,8 @@ CREATE TABLE IF NOT EXISTS icyb.accounts (
     user_id integer NOT NULL,
     type smallint NOT NULL,
     description character varying(25) COLLATE,
-    credit_limit money,
-    discharge_date date,
+    credit_limit numeric(8, 2),
+    discharge_day smallint,
     PRIMARY KEY (id)
 ) TABLESPACE pg_default;
 

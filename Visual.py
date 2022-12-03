@@ -154,9 +154,16 @@ def reply_help(cmd):
 
 
 ERROR_MESSAGE = {
-    '/transactions add: account empty': 'Похоже у вас нет ни одного счета. Чтобы создать новый введите комманду <code>/account add</code> или нажмите на кнопку ниже.',
-    '/account add: description empty': 'Напишите название для нового счета или выберете из представленных ниже.',
-    '/account add: type empty': 'Выберете тип счета.'
+    '/transactions add: accounts empty': 'Похоже у вас нет ни одного счета. Чтобы создать новый введите комманду <code>/accounts add</code> или нажмите на кнопку ниже.',
+    '/transactions add: file empty': 'Укажите файл, ответив на сообщение с ним.',
+    '/transactions add: balance empty': 'Необходимо указать баланс по счету.',
+    '/transactions add: account not selected': 'Напишите название счета или выберете его ниже.',
+    '/transactions add: account not found': 'Такого счета не найдено. Проверьте название или выберете счет ниже.',
+
+    '/accounts add: description empty': 'Напишите название для нового счета или выберете из представленных ниже.',
+    '/accounts add: type empty': 'Выберете тип счета.',
+    '/accounts add: credit_limit empty': 'Напишите кредитный лимит в формате: 1000.00',
+    '/accounts add: discharge_day empty': 'Напишите день выписки. Одним числом.',
 }
 
 
