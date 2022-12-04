@@ -35,22 +35,23 @@ class User:
         self.onetime_transactions = db_engine.download_onetime(self.id)
         self.accounts = db_engine.download_accounts(self.id)
 
-    def load_from_file(self, db_engine, file_full_name, new_balance):
+    def load_from_file(self, db_engine, file_full_name, account_id, new_balance, ):
         '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
 
         Args:
             db_engine: объект для работы с базой данных.
             file_full_name: полное имя файла.
+            account_id: id счета, в БД.
             new_balance: текущий баланс пользователя, после последней операции в файле.
 
         Returns:
-            Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
+            Датафрейм всех транзакций с колонками ['date', 'account_id', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
         self.transactions = dl.tinkoff_file_parse(
-            file_full_name, db_engine, self.id)
+            file_full_name, db_engine, self.id, account_id)
         self.transactions = self.__add_and_merge_transactions(
-            self.transactions, new_balance, db_engine)
+            account_id, self.transactions, new_balance, db_engine)
 
         return self.transactions
 
@@ -238,10 +239,12 @@ class User:
             discharge_day: День выписки.
         '''
         if account_type == 1:
-            new_row = {'user_id': self.id, 'type': account_type, 'description': description}
+            new_row = {'user_id': self.id, 'type': account_type,
+                       'description': description}
         if account_type == 2:
-            new_row = {'user_id': self.id, 'type': account_type, 'description': description, 'credit_limit': credit_limit, 'discharge_day': discharge_day}
-        
+            new_row = {'user_id': self.id, 'type': account_type, 'description': description,
+                       'credit_limit': credit_limit, 'discharge_day': discharge_day}
+
         db_index = db_engine.add_event('accounts', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
@@ -429,7 +432,7 @@ class User:
 
         return cleared_df.resample('1D').sum()
 
-    def __add_and_merge_transactions(self, new_transactions, new_balance, db_engine):
+    def __add_and_merge_transactions(self, account_id, new_transactions, new_balance, db_engine):
         old_transactions = db_engine.download_transactions(
             self.id)  # !!! Зачем 2 раза загружать?
         old_transactions['is_new'] = False
@@ -437,16 +440,20 @@ class User:
         new_transactions['is_new'] = True
 
         full_transactions = pd.concat([old_transactions, new_transactions]).drop_duplicates(
-            subset=['date', 'amount']).sort_values('date')
+            subset=['date', 'account_id', 'amount']).sort_values('date')
 
         new_start_date = full_transactions[full_transactions['is_new']
                                            ].iloc[0]['date']
         if (len(full_transactions[~full_transactions['is_new']]) > 0) and \
             (len(full_transactions[full_transactions['is_new']]) > 0) and \
-                (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > new_start_date):
+                (full_transactions[(~full_transactions['is_new']) &
+                                   (full_transactions['account_id']
+                                    == account_id)
+                                   ].iloc[-1]['date'] > new_start_date):
 
             db_engine.delete_transactions(
-                self.id, full_transactions[full_transactions['is_new']].iloc[0]['date'])
+                self.id, account_id,
+                full_transactions[full_transactions['is_new']].iloc[0]['date'])
 
             full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
                 subset=['date', 'amount']).sort_values('date')

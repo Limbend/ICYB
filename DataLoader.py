@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime
 
 
-def tinkoff_file_parse(path, db_engine, user_id):
+def tinkoff_file_parse(path, db_engine, user_id, account_id):
     df = pd.read_csv(path, sep=';', parse_dates=[
                      0, 1], dayfirst=True, decimal=",", encoding='cp1251')
     df = df[df['Статус'] == 'OK'][[
@@ -24,8 +24,9 @@ def tinkoff_file_parse(path, db_engine, user_id):
 
     for k, v in db_engine.download_c_rules(user_id=user_id):
         df_for_sql.loc[df_for_sql['description'] == k, 'category'] = v
+    df_for_sql['account_id'] = account_id
 
-    return df_for_sql
+    return df_for_sql[['date', 'account_id', 'amount', 'category', 'description']]
 
 
 def amount_parser(string):
@@ -123,9 +124,9 @@ class DB_Engine:
                                    sqla.Column('type', sqla.SmallInteger),
                                    sqla.Column('description', sqla.String),
                                    sqla.Column('credit_limit', sqla.Numeric),
-                                   sqla.Column('discharge_day', sqla.SmallInteger),
-                                   schema=self.schema
-                                   ),
+                                   sqla.Column('discharge_day',
+                                               sqla.SmallInteger),
+                                   schema=self.schema),
 
         }
 
@@ -156,7 +157,13 @@ class DB_Engine:
             'add_onetime': self.tables['onetime'].insert().returning(self.tables['onetime'].c.id),
             'add_accounts': self.tables['accounts'].insert().returning(self.tables['accounts'].c.id),
 
-            'delete_transactions': self.tables['transactions'].update().where(self.tables['transactions'].c.user_id == sqla.bindparam('user_id')).values(is_del=True),
+            # 'delete_transactions': self.tables['transactions'].update().where(self.tables['transactions'].c.user_id == sqla.bindparam('user_id')).values(is_del=True),
+            'delete_transactions': self.tables['transactions'].update().where(sqla.and_(
+                self.tables['transactions'].c.user_id ==
+                sqla.bindparam('b_user_id'),
+                self.tables['transactions'].c.account_id ==
+                sqla.bindparam('account_id')
+            )).values(is_del=True),
             'delete_regular': self.tables['regular'].update().where(self.tables['regular'].c.id.in_(sqla.bindparam('db_id', expanding=True))).values(is_del=True),
             'delete_onetime': self.tables['onetime'].update().where(self.tables['onetime'].c.id.in_(sqla.bindparam('db_id', expanding=True))).values(is_del=True),
 
@@ -212,16 +219,17 @@ class DB_Engine:
             'dump'
         ]).to_sql(table, self.connector, schema=self.schema, if_exists='append', index=False)
 
-    def delete_transactions(self, user_id, start_date, end_date='end'):
+    def delete_transactions(self, user_id, account_id, start_date, end_date='end'):
         query = self.sql_queries['delete_transactions']
         if end_date == 'end':
-            query = query.where(self.tables.c.date > start_date)
+            query = query.where(
+                self.tables['transactions'].c.date > start_date)
         else:
             query = query.where(
-                self.tables.c.date.between(start_date, end_date))
+                self.tables['transactions'].c.date.between(start_date, end_date))
 
         self.connector.execute(self.sql_queries['delete_transactions'], {
-                               'user_id': user_id})
+                               'user_id': user_id, 'account_id': account_id})
 
     def add_event(self, table: str, data: dict):
         result = self.connector.execute(self.sql_queries['add_'+table], data)

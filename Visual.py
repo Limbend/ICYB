@@ -120,6 +120,7 @@ def show_onetime(onetime, only_relevant, columns, index=None):
     else:
         return f'Разовая транзакция\n\n        ' + show_row(result, index, columns)
 
+
 def show_accounts(accounts, columns, index=None):
     if index is None:
         return 'Счета\n        ' + show_table(accounts, columns)
