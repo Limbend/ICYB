@@ -472,7 +472,6 @@ class BotDialogTransactions(BotDialog):
                 self.wait_answer_kwargs = {'file_received': file_received}
 
                 keyboard_markup = InlineKeyboardMarkup(
-                    # [[InlineKeyboardButton(account_name, callback_data=f'{self.get_cmd_mask()} add \'{new_balance}\' {account_name}')]
                     [[InlineKeyboardButton(account_name, callback_data=f'\'{new_balance}\' {account_name}')]
                      for account_name in self.user.accounts['description']])
                 self.reply_error(message, 'add', 'account not found',
@@ -482,8 +481,8 @@ class BotDialogTransactions(BotDialog):
         path = './temp/' + file_received.file_name
         # TODO Обработать исключение неудачной загрузки
         file_received.get_file().download(custom_path=path)
-        # transactions = self.user.load_from_file(
-        #     db_engine, path, account_id, dl.amount_parser(new_balance))
+        transactions = self.user.load_from_file(
+            db_engine, path, account_id, dl.amount_parser(new_balance))
         # comparison_data = self.user.get_comparison_data()
 
         # message.reply_text(

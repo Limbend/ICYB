@@ -3,14 +3,10 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQuery
 import json
 import logging
 import os
-import sys
-
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
-
 from Manager import UserManager
 
-print(sys.version_info)
 
 logging.basicConfig(format='%(asctime)-12s - %(name)-12s - %(levelname)-8s - %(message)s',
                     level=logging.INFO, filename='.np.log')

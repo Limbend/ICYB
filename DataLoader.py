@@ -153,6 +153,7 @@ class DB_Engine:
                 self.tables['transactions'].c.is_del == False
             )).order_by(self.tables['transactions'].c.date),
 
+            'add_transactions': self.tables['transactions'].insert().returning(self.tables['transactions'].c.id),
             'add_regular': self.tables['regular'].insert().returning(self.tables['regular'].c.id),
             'add_onetime': self.tables['onetime'].insert().returning(self.tables['onetime'].c.id),
             'add_accounts': self.tables['accounts'].insert().returning(self.tables['accounts'].c.id),
@@ -173,7 +174,8 @@ class DB_Engine:
         }
 
     def download_c_rules(self, user_id):
-        return self.__read_sql('get_c_rules', {'user_id': user_id})[['key', 'value']].values.tolist()
+        return self.__read_sql('get_c_rules',
+                               {'user_id': user_id}, drop_uid=False)[['key', 'value']].values.tolist()
 
     def download_regular(self, user_id):
         return self.__read_sql('get_regular', {'user_id': user_id})
@@ -185,24 +187,14 @@ class DB_Engine:
         return data
 
     def download_accounts(self, user_id):
-        data = self.__read_sql(
-            'get_accounts', {'user_id': user_id})
-        return data
+        return self.__read_sql('get_accounts', {'user_id': user_id})
 
     def download_transactions(self, user_id):
         return self.__read_sql('get_transactions', {'user_id': user_id})
 
-    def add_transactions(self, data, user_id, table='transactions'):
-        data = data[['date', 'amount', 'category',
-                     'description', 'balance']].copy().sort_values('date')
-        data['user_id'] = user_id
-        data['is_del'] = False
-
-        data.to_sql(table, self.connector, schema=self.schema,
-                    if_exists='append', index=False)
-
     def download_last_model(self, user_id):
-        df = self.__read_sql('get_last_model', {'user_id': user_id})
+        df = self.__read_sql('get_last_model',
+                             {'user_id': user_id}, drop_uid=False)
         if df.empty:
             return None
 
@@ -243,10 +235,15 @@ class DB_Engine:
         self.connector.execute(
             self.sql_queries['update_'+table], {'db_id': db_id, column: value})
 
-    def __read_sql(self, quory_name: str, values: dict, parse_dates=None):
-        return pd.read_sql(
+    def __read_sql(self, quory_name: str, values: dict, parse_dates=None, drop_uid=True):
+        data = pd.read_sql(
             sql=self.sql_queries[quory_name],
             con=self.connector,
             params=values,
             parse_dates=parse_dates
-        ).reset_index().rename(columns={'id': 'db_id'})
+        ).reset_index(drop=True).rename(columns={'id': 'db_id'})
+        #!!! Точно ли нужен не отброшенный индекс?
+
+        if drop_uid:
+            return data.drop('user_id', axis=1)
+        return data

@@ -48,10 +48,10 @@ class User:
             Датафрейм всех транзакций с колонками ['date', 'account_id', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-        self.transactions = dl.tinkoff_file_parse(
+        new_transactions = dl.tinkoff_file_parse(
             file_full_name, db_engine, self.id, account_id)
-        self.transactions = self.__add_and_merge_transactions(
-            account_id, self.transactions, new_balance, db_engine)
+        self.__add_and_merge_transactions(
+            account_id, new_transactions, new_balance, db_engine)
 
         return self.transactions
 
@@ -433,44 +433,53 @@ class User:
         return cleared_df.resample('1D').sum()
 
     def __add_and_merge_transactions(self, account_id, new_transactions, new_balance, db_engine):
-        old_transactions = db_engine.download_transactions(
-            self.id)  # !!! Зачем 2 раза загружать?
+        old_transactions = self.transactions
         old_transactions['is_new'] = False
         new_transactions = new_transactions.copy()
         new_transactions['is_new'] = True
 
-        full_transactions = pd.concat([old_transactions, new_transactions]).drop_duplicates(
+        full_tr = pd.concat([old_transactions, new_transactions]).drop_duplicates(
             subset=['date', 'account_id', 'amount']).sort_values('date')
 
-        new_start_date = full_transactions[full_transactions['is_new']
-                                           ].iloc[0]['date']
-        if (len(full_transactions[~full_transactions['is_new']]) > 0) and \
-            (len(full_transactions[full_transactions['is_new']]) > 0) and \
-                (full_transactions[(~full_transactions['is_new']) &
-                                   (full_transactions['account_id']
-                                    == account_id)
-                                   ].iloc[-1]['date'] > new_start_date):
+        if len(full_tr[full_tr['is_new']]) > 0:
+            new_start_date = full_tr[full_tr['is_new']].iloc[0]['date']
+            if (len(full_tr[(~full_tr['is_new']) & (full_tr['account_id'] == account_id)]) > 0) and \
+                    (full_tr[(~full_tr['is_new']) & (full_tr['account_id'] == account_id)
+                             ].iloc[-1]['date'] > new_start_date):
+                db_engine.delete_transactions(
+                    self.id, account_id,
+                    full_tr[full_tr['is_new']].iloc[0]['date'])
 
-            db_engine.delete_transactions(
-                self.id, account_id,
-                full_transactions[full_transactions['is_new']].iloc[0]['date'])
+                full_tr = pd.concat([old_transactions[old_transactions['date'] < new_start_date],
+                                    new_transactions]).drop_duplicates(
+                    subset=['date', 'account_id', 'amount']).sort_values('date')
 
-            full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
-                subset=['date', 'amount']).sort_values('date')
+            full_tr.loc[full_tr['is_new'], 'balance'] = self.__get_balance_past(
+                new_balance, full_tr.loc[full_tr['is_new'], 'amount'])
+            full_tr.loc[full_tr['is_new'], 'is_del'] = False
 
-        full_transactions['balance'] = self.__get_balance_past(
-            new_balance, full_transactions['amount'])
-        db_engine.add_transactions(
-            full_transactions[full_transactions['is_new']], user_id=self.id)
+            data_for_db = full_tr.loc[full_tr['is_new'],
+                                      ['date', 'account_id', 'amount', 'category', 'description', 'balance']].copy()
+            data_for_db['user_id'] = self.id
+            data_for_db = data_for_db.to_dict(orient='records')
 
-        return full_transactions.reset_index(drop=True)
+            sql_ret = db_engine.add_event('transactions', data_for_db)
+            full_tr.loc[full_tr['is_new'], 'db_id'] = range(
+                sql_ret, len(full_tr[full_tr['is_new']]) + sql_ret)
+            full_tr = full_tr.astype({
+                'db_id': int,
+                'is_del': bool,
+                'is_new': bool,
+            })
 
-    def __get_balance_past(self, start, transactions):
-        result = transactions.cumsum()
+            self.transactions = full_tr.reset_index(drop=True)
+
+    def __get_balance_past(self, start, amounts):
+        result = amounts.cumsum()
         return result + (start - result.iloc[-1])
 
-    def __get_balance_future(self, start, transactions):
-        return transactions.cumsum() + start
+    def __get_balance_future(self, start, amounts):
+        return amounts.cumsum() + start
 
     def __drop_paired(self, data: pd.DataFrame, by: str):
         sort_values = data[by].sort_values()
