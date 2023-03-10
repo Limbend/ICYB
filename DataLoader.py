@@ -9,10 +9,21 @@ import re
 from datetime import date, datetime
 
 
-def tinkoff_file_parse(path, db_engine, user_id, account_id):
+def tinkoff_file_parse(path, db_engine, user_id, account_id=-1):
     df = pd.read_csv(path, sep=';', parse_dates=[
                      0, 1], dayfirst=True, decimal=",", encoding='cp1251')
     df = df[df['Статус'] == 'OK'][[
+        'Дата операции',
+        'Номер карты',
+        'Сумма платежа',
+        'Категория',
+        'Описание'
+    ]]
+
+    if account_id == -1:
+        pass
+    else:
+        df = df[[
         'Дата операции',
         'Сумма платежа',
         'Категория',

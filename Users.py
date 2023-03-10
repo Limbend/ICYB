@@ -68,10 +68,13 @@ class User:
 
         predicted_regular = self.__predict_regular_events(start_date, end_date)
 
+        predicted_onetime = self.onetime_transactions[(self.onetime_transactions['date'] >= start_date) & (
+            self.onetime_transactions['date'] <= end_date)]
+        predicted_onetime['is_overdue'] = False
+
         self.predicted_events = pd.concat([
             predicted_regular,
-            self.onetime_transactions[(self.onetime_transactions['date'] >= start_date) & (
-                self.onetime_transactions['date'] <= end_date)],
+            predicted_onetime,
         ]).sort_values('date')
 
         return self.predicted_events
@@ -407,7 +410,7 @@ class User:
         cleared_df = data.copy()
         cleared_df = self.__drop_paired(cleared_df, 'amount')
 
-        # Выделяет только транзакции
+        # Выделяет только расходы
         markers = cleared_df['amount'] < 0
 
         for i in self.regular_list.index:
@@ -545,7 +548,10 @@ class User:
 
     def __get_markers_regular(self, data, event):
         if event['search_f'] == 'description':
-            return data['description'] == event['arg_sf']
+            if ',' in event['arg_sf']:
+                return data['description'].isin(event['arg_sf'].split(','))
+            else:
+                return data['description'] == event['arg_sf']
 
         elif event['search_f'] == 'amount_description':
             return (data['description'] == event['arg_sf']) & (data['amount'] == event['amount'])

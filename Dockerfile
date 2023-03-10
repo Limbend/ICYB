@@ -1,9 +1,9 @@
-FROM python:3.8 AS builder
+FROM python:3.9 AS builder
 ADD ./requirements.txt .
 
 RUN pip install --user -r requirements.txt
 
-FROM python:3.8-slim
+FROM python:3.9-slim
 WORKDIR /root/bot
 MAINTAINER limbend <limbeend@gmail.com>
 LABEL version="1"
