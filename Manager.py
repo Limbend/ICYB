@@ -483,12 +483,12 @@ class BotDialogTransactions(BotDialog):
         file_received.get_file().download(custom_path=path)
         transactions = self.user.load_from_file(
             db_engine, path, account_id, dl.amount_parser(new_balance))
-        # comparison_data = self.user.get_comparison_data()
+        comparison_data = self.user.get_comparison_data()
 
-        # message.reply_text(
-        #     text=Visual.successful_adding_transactions(transactions), quote=True)
-        # message.reply_photo(
-        #     photo=Visual.comparison_plot(comparison_data), quote=False)
+        message.reply_text(
+            text=Visual.successful_adding_transactions(transactions), quote=True)
+        message.reply_photo(
+            photo=Visual.comparison_plot(comparison_data), quote=False)
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
         command = BotDialog.new_message(self, update, db_engine, command)

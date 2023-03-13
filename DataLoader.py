@@ -253,8 +253,7 @@ class DB_Engine:
             params=values,
             parse_dates=parse_dates
         ).reset_index(drop=True).rename(columns={'id': 'db_id'})
-        #!!! Точно ли нужен не отброшенный индекс?
-
+        
         if drop_uid:
             return data.drop('user_id', axis=1)
         return data
