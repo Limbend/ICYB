@@ -1,29 +1,27 @@
 # ICYB
-## Описание
-ICYB - бот для telegram, предсказывающий будущее транзакции пользователя, основываясь на статистике за предыдущий период. 
 
-Данные о банковских операциях, бот получает из файла выписки и сохраняет их в базу данных (PostgreSQL). На данный момент реализована обработка файлов от Тинькофф банк. 
+Problems with spending planning? Can you afford to buy it now? Don't know what will happen in a month? Don't worry, `I`'ll `C`alculate `Y`our `B`udget.
 
-Эти данные используются для обучения ML модели, под пользователя. Она также храниться в базе, и используется для предсказания, пока бот не получит новых данных.
+## Description
 
-Для увеличения точности предсказания для пользователя можно создать список регулярных трат, дата и сумма которых известна заранее (например, различные подписки). Их бот рассчитывает отдельно, а затем складывает с предсказаниями модели. При обучении модели регулярные траты из общей истории исключаются.
+**ICYB** - telegram bot. Its predictions are based on the history of transactions and the list of subscriptions.
 
-В качестве отчета предсказания бот присылает график и таблицу движения баланса на счете.
+Enter the payment for the house, utilities, phone and internet. Don't forget to subscribe to your favorite streaming services. Loan repayments, as well as a debt to your friend. And of course paydays.
+
+Let this smart calculator do the rest. He will draw you a graph of the balance on the account.
 
 ![](./docs/sources/img/balance_prediction.png)
 
-## Информация о файлах
+## Modules
 
-`bot.py`- основной файл программы. Тут описан скрипт поведения бота.
+`bot.py`- Main program file. Bot behavior script.
 
-`Users.py` - описаны классы пользователя и менеджера, для работы со списком пользователей.
+`Manager.py` - Operations with users. Bot dialogue system.
 
-`DataLoader.py` -  содержит методы работы с файлами и базой данных.
+`Users.py` - The class for the user. Stores and processes all information.
 
-`EventEngine.py` - содержит основные методы для работы с датафреймами трат.
+`DataLoader.py` - Methods for working with files and the database.
 
-`ML.py` - содержит методы работы с моделями и подготовки для них данных.
+`ML.py` - Data preprocessing. Machine learning models.
 
-`Visual.py` - подготовка графиков и таблиц по данным. 
-
-`settings.np.json` - файл с настройками для программы. Файл содержит конфиденциальную информацию, по этому вместо него в git сохранен шаблон, под именем `settings.json`
+`Visual.py` - Preparing data for output. Drawing graphs and tables.

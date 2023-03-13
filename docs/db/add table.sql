@@ -69,3 +69,35 @@ CREATE TABLE IF NOT EXISTS icyb.sbs_models (
 
 ALTER TABLE
     IF EXISTS icyb.sbs_models OWNER to postgres;
+
+
+CREATE TABLE IF NOT EXISTS icyb.accounts (
+    id serial NOT NULL,
+    user_id integer NOT NULL,
+    type smallint NOT NULL,
+    description character varying(25) COLLATE,
+    credit_limit numeric(8, 2),
+    discharge_day smallint,
+    PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
+ALTER TABLE
+    IF EXISTS icyb.accounts OWNER to postgres;
+
+
+CREATE TABLE IF NOT EXISTS icyb.shopping_list (
+    id serial NOT NULL,
+    user_id integer NOT NULL,
+    group_id integer NOT NULL DEFAULT 0,
+    status smallint NOT NULL DEFAULT 1,
+    priority smallint NOT NULL,
+    date date NOT NULL,
+    amount numeric(8, 2) NOT NULL,
+    currency smallint NOT NULL DEFAULT 0,
+    title character varying(60) COLLATE pg_catalog."default" NOT NULL,
+    description character varying(400) COLLATE pg_catalog."default" NOT NULL,
+    PRIMARY KEY (id)
+) TABLESPACE pg_default;
+
+ALTER TABLE
+    IF EXISTS icyb.accounts OWNER to postgres;

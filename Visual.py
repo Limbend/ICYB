@@ -1,3 +1,4 @@
+from typing import overload
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.dates import DateFormatter
@@ -12,6 +13,7 @@ FORMATTERS = {
     'start_date': lambda x: x.strftime('%d.%m.%Y'),
     'end_date': lambda x: x.strftime('%d.%m.%Y') if not(pd.isna(x)) else 'NaT',
     'amount': "{:.2f}".format,
+    # 'description': "{:<17}".format,
 }
 
 
@@ -80,8 +82,8 @@ def comparison_plot(comparison):
 
 
 def show_table(data, columns):
-    return data[columns].to_string(
-        formatters={key: FORMATTERS[key] for key in columns if key in FORMATTERS})
+    return '<pre>' + data[columns].to_string(
+        formatters={key: FORMATTERS[key] for key in columns if key in FORMATTERS}) + '</pre>'
 
 
 def show_row(data, index, columns):
@@ -89,13 +91,13 @@ def show_row(data, index, columns):
     formatters = {key: FORMATTERS[key] for key in columns if key in FORMATTERS}
 
     result[list(formatters)] = result.apply(formatters)
-    return result.transpose().to_string()
+    return '<pre>' + result.transpose().to_string() + '</pre>'
 
 
 def show_events(events):
     result = events.copy()
     result.index = result.index.strftime('%d.%m.%Y')
-    return 'Регулярные транзакции\n        ' + show_table(result, columns=list(result))
+    return 'Регулярные транзакции\n        ' + show_table(result, columns=['amount', 'description'])
 
 
 def show_regular(regular, only_relevant, columns, index=None):
@@ -119,20 +121,52 @@ def show_onetime(onetime, only_relevant, columns, index=None):
         return f'Разовая транзакция\n\n        ' + show_row(result, index, columns)
 
 
+def show_accounts(accounts, columns, index=None):
+    if index is None:
+        return 'Счета\n        ' + show_table(accounts, columns)
+    else:
+        return f'Счет\n\n        ' + show_row(accounts, index, columns)
+
+
 def successful_adding_transactions(transactions):
-    return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРащница прогноза и фактического баланса:"
+    return f"В базу успешно добавлено {len(transactions[transactions['is_new']])} транзакций.\nРазница прогноза и фактического баланса:"
 
 
 def predict_info(events, predicted_transactions):
-    table = show_events(events)
+    data = events.copy()
+    data.loc[data['is_overdue'], 'description'] = data.loc[data['is_overdue'],
+                                                           'description'] + ' \u2757'  # ❗
+    table = show_events(data)
     return table + f"\n\n\nДополнительно к этим транзакциям, средний расход в день составляет: {predicted_transactions['amount'].mean():.2f}"
 
 
 HELP_MESSAGE = {
-    '/regular add': '!!! /regular add help',
+    '/regular add': 'Для добавления новой регулярной транзакции введите команду <code>/regular add</code>, а затем, через пробел, укажите:\nначальную дату или начальную-конечную дату\nчерез запятую, без пробела, количество лет, месяцев и дней между транзакциями\nкомментарий\nсумму\n\nПример:\n<pre>/regular add 30.12.2200-30.12.3001 0,1,0 -6500.00 "Расрочка за холодильник"</pre>\n<pre>/regular add 30.12 0,0,30 -450 "Мобильная связь"</pre>',
+    '/regular del': 'Для удаления регулярной транзакции введите команду <code>/regular del</code>, а затем, укажите номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/regular del 17</pre>\n<pre>/regular del 17,18,25</pre>',
+
+    '/onetime add': 'Для добавления новой разовой транзакции введите команду <code>/onetime add</code>, а затем, через пробел, укажите дату, сумму и комментарий.\n\nПример:\n<pre>/onetime add 30.12.2200 -652.50 "Вернуть долг"</pre>',
+    '/onetime del': 'Для удаления разовой транзакции введите команду <code>/onetime del</code>, а затем, укажите номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/onetime del 17</pre>\n<pre>/onetime del 17,18,25</pre>',
 
 }
 
 
 def reply_help(cmd):
-    return HELP_MESSAGE.get(cmd, '!!! default help message')
+    return HELP_MESSAGE.get(cmd, f'!!! default help message for {cmd}')
+
+
+ERROR_MESSAGE = {
+    '/transactions add: accounts empty': 'Похоже у вас нет ни одного счета. Чтобы создать новый введите комманду <code>/accounts add</code> или нажмите на кнопку ниже.',
+    '/transactions add: file empty': 'Укажите файл, ответив на сообщение с ним.',
+    '/transactions add: balance empty': 'Необходимо указать баланс по счету.',
+    '/transactions add: account not selected': 'Напишите название счета или выберете его ниже.',
+    '/transactions add: account not found': 'Такого счета не найдено. Проверьте название или выберете счет ниже.',
+
+    '/accounts add: description empty': 'Напишите название для нового счета или выберете из представленных ниже.',
+    '/accounts add: type empty': 'Выберете тип счета.',
+    '/accounts add: credit_limit empty': 'Напишите кредитный лимит в формате: 1000.00',
+    '/accounts add: discharge_day empty': 'Напишите день выписки. Одним числом.',
+}
+
+
+def reply_error(cmd):
+    return ERROR_MESSAGE.get(cmd, f'!!! default error message for {cmd}')

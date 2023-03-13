@@ -33,23 +33,25 @@ class User:
         self.sbs_model = db_engine.download_last_model(self.id)
         self.regular_list = db_engine.download_regular(self.id)
         self.onetime_transactions = db_engine.download_onetime(self.id)
+        self.accounts = db_engine.download_accounts(self.id)
 
-    def load_from_file(self, db_engine, file_full_name, new_balance):
+    def load_from_file(self, db_engine, file_full_name, account_id, new_balance, ):
         '''Загружает, обрабатывает и сохраняет транзакции из файла. Соединяет новую информацию из файла с транзакциями сохраненными в базу до этого
 
         Args:
             db_engine: объект для работы с базой данных.
             file_full_name: полное имя файла.
+            account_id: id счета, в БД.
             new_balance: текущий баланс пользователя, после последней операции в файле.
 
         Returns:
-            Датафрейм всех транзакций с колонками ['date', 'amount', 'category', 'description', 'balance', 'is_new']
+            Датафрейм всех транзакций с колонками ['date', 'account_id', 'amount', 'category', 'description', 'balance', 'is_new']
             где is_new == True если эта строка из файла.
         '''
-        self.transactions = dl.tinkoff_file_parse(
-            file_full_name, db_engine, self.id)
-        self.transactions = self.__add_and_merge_transactions(
-            self.transactions, new_balance, db_engine, self.id)
+        new_transactions = dl.tinkoff_file_parse(
+            file_full_name, db_engine, self.id, account_id)
+        self.__add_and_merge_transactions(
+            account_id, new_transactions, new_balance, db_engine)
 
         return self.transactions
 
@@ -66,10 +68,13 @@ class User:
 
         predicted_regular = self.__predict_regular_events(start_date, end_date)
 
+        predicted_onetime = self.onetime_transactions[(self.onetime_transactions['date'] >= start_date) & (
+            self.onetime_transactions['date'] <= end_date)]
+        predicted_onetime['is_overdue'] = False
+
         self.predicted_events = pd.concat([
             predicted_regular,
-            self.onetime_transactions[(self.onetime_transactions['date'] >= start_date) & (
-                self.onetime_transactions['date'] <= end_date)],
+            predicted_onetime,
         ]).sort_values('date')
 
         return self.predicted_events
@@ -195,7 +200,7 @@ class User:
             'adjust_date': adjust_date,
             'follow_overdue': follow_overdue
         }
-        db_index = db_engine.add_regular(new_row)
+        db_index = db_engine.add_event('regular', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
 
@@ -215,16 +220,44 @@ class User:
         '''
         new_row = {'user_id': self.id, 'description': description,
                    'amount': amount, 'date': date}
-        db_index = db_engine.add_onetime(new_row)
+        db_index = db_engine.add_event('onetime', new_row)
         new_row['db_id'] = db_index
         del new_row['user_id']
 
         onetime_transactions = pd.concat([
-            onetime_transactions,
+            self.onetime_transactions,
             pd.DataFrame([new_row])
         ], axis=0).reset_index(drop=True)
 
         self.onetime_transactions = onetime_transactions
+
+    def add_accounts(self, db_engine, account_type, description, credit_limit=0, discharge_day=0):
+        '''Добавляет счет.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            account_type: тип счета.
+            description: описание счета.
+            credit_limit: Кредитный лимит.
+            discharge_day: День выписки.
+        '''
+        if account_type == 1:
+            new_row = {'user_id': self.id, 'type': account_type,
+                       'description': description}
+        if account_type == 2:
+            new_row = {'user_id': self.id, 'type': account_type, 'description': description,
+                       'credit_limit': credit_limit, 'discharge_day': discharge_day}
+
+        db_index = db_engine.add_event('accounts', new_row)
+        new_row['db_id'] = db_index
+        del new_row['user_id']
+
+        accounts = pd.concat([
+            self.accounts,
+            pd.DataFrame([new_row])
+        ], axis=0).reset_index(drop=True)
+
+        self.accounts = accounts
 
     def delete_regular(self, db_engine, id):
         '''Удаляет регулярное событие.
@@ -233,9 +266,9 @@ class User:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
         '''
-        db_id = tuple(str(i)
-                      for i in self.regular_list.loc[id, 'db_id'].values)
-        db_engine.delete_regular(db_id)
+        db_id = tuple(
+            str(i) for i in self.regular_list.loc[id, 'db_id'].values)
+        db_engine.delete_event('regular', db_id)
 
         self.regular_list = self.regular_list.drop(id).reset_index(drop=True)
 
@@ -246,15 +279,26 @@ class User:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
         '''
-        db_id = tuple(str(i)
-                      for i in self.onetime_transactions.loc[id, 'db_id'].values)
-        db_engine.delete_onetime(db_id)
+        db_id = tuple(
+            str(i) for i in self.onetime_transactions.loc[id, 'db_id'].values)
+        db_engine.delete_event('onetime', db_id)
 
         self.onetime_transactions = self.onetime_transactions.drop(
             id).reset_index(drop=True)
 
+    def edit_regular(self, db_engine, id, parameter: str, new_value):
+        '''Удаляет регулярное событие.
+
+        Args:
+            db_engine: объект для работы с базой данных.
+            id: локальный id события, которое нужно удалить.
+        '''
+        db_id = str(self.regular_list.loc[id, 'db_id'])
+        db_engine.edit_event('regular', db_id, parameter, new_value)
+
+        self.regular_list.loc[id, parameter] = new_value
+
     def __predict_regular_events(self, g_start_date, g_end_date, window_price=3, uniform_distribution=False):
-        # !!!
         new_regular_events = self.regular_list.copy()
         result = []
         j_limit = 1000
@@ -306,7 +350,6 @@ class User:
                 new_start = r_event['start_date'] + d_date * j
 
             # Проверка на просрочку
-            j -= 1
             if(r_event['follow_overdue'] and j > 0):
                 pay_date_overdue = g_start_date + relativedelta(days=1)
 
@@ -323,9 +366,8 @@ class User:
                 else:
                     # Посчитать сколько должно быть регулярок между стартовой датой r_event['start_date'] и начальной датой поиска g_start_date.
                     # Вычесть из них сколько по факту было.
-
                     count_overdue = j - sum(self.__get_markers_regular(
-                        self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event)) + 1
+                        self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event))
                     # Если число положительное, то есть просрочки.
                     if(count_overdue > 0):
                         for i_overdue in range(count_overdue):
@@ -368,7 +410,7 @@ class User:
         cleared_df = data.copy()
         cleared_df = self.__drop_paired(cleared_df, 'amount')
 
-        # Выделяет только транзакции
+        # Выделяет только расходы
         markers = cleared_df['amount'] < 0
 
         for i in self.regular_list.index:
@@ -393,48 +435,56 @@ class User:
 
         return cleared_df.resample('1D').sum()
 
-    def __add_and_merge_transactions(self, new_transactions, new_balance, db_engine):
-        # !!!
-        old_transactions = db_engine.download_transactions(
-            self.id)  # !!! Зачем 2 раза загружать?
+    def __add_and_merge_transactions(self, account_id, new_transactions, new_balance, db_engine):
+        old_transactions = self.transactions
         old_transactions['is_new'] = False
         new_transactions = new_transactions.copy()
         new_transactions['is_new'] = True
 
-        full_transactions = pd.concat([old_transactions, new_transactions]).drop_duplicates(
-            subset=['date', 'amount']).sort_values('date')
+        full_tr = pd.concat([old_transactions, new_transactions]).drop_duplicates(
+            subset=['date', 'account_id', 'amount']).sort_values('date')
 
-        new_start_date = full_transactions[full_transactions['is_new']
-                                           ].iloc[0]['date']
-        if (len(full_transactions[~full_transactions['is_new']]) > 0) and \
-            (len(full_transactions[full_transactions['is_new']]) > 0) and \
-                (full_transactions[~full_transactions['is_new']].iloc[-1]['date'] > new_start_date):
+        if len(full_tr[full_tr['is_new']]) > 0:
+            new_start_date = full_tr[full_tr['is_new']].iloc[0]['date']
+            if (len(full_tr[(~full_tr['is_new']) & (full_tr['account_id'] == account_id)]) > 0) and \
+                    (full_tr[(~full_tr['is_new']) & (full_tr['account_id'] == account_id)
+                             ].iloc[-1]['date'] > new_start_date):
+                db_engine.delete_transactions(
+                    self.id, account_id,
+                    full_tr[full_tr['is_new']].iloc[0]['date'])
 
-            print(f"Delete transactions after {new_start_date} in DB")
-            db_engine.delete_transactions(
-                self.id, full_transactions[full_transactions['is_new']].iloc[0]['date'])
+                full_tr = pd.concat([old_transactions[old_transactions['date'] < new_start_date],
+                                    new_transactions]).drop_duplicates(
+                    subset=['date', 'account_id', 'amount']).sort_values('date')
 
-            full_transactions = pd.concat([old_transactions[old_transactions['date'] < new_start_date], new_transactions]).drop_duplicates(
-                subset=['date', 'amount']).sort_values('date')
+            full_tr.loc[full_tr['is_new'], 'balance'] = self.__get_balance_past(
+                new_balance, full_tr.loc[full_tr['is_new'], 'amount'])
+            full_tr.loc[full_tr['is_new'], 'is_del'] = False
 
-        full_transactions['balance'] = self.__get_balance_past(
-            new_balance, full_transactions['amount'])
-        db_engine.add_transactions(
-            full_transactions[full_transactions['is_new']], user_id=self.id)
+            data_for_db = full_tr.loc[full_tr['is_new'],
+                                      ['date', 'account_id', 'amount', 'category', 'description', 'balance']].copy()
+            data_for_db['user_id'] = self.id
+            data_for_db = data_for_db.to_dict(orient='records')
 
-        return full_transactions.reset_index(drop=True)
+            sql_ret = db_engine.add_event('transactions', data_for_db)
+            full_tr.loc[full_tr['is_new'], 'db_id'] = range(
+                sql_ret, len(full_tr[full_tr['is_new']]) + sql_ret)
+            full_tr = full_tr.astype({
+                'db_id': int,
+                'is_del': bool,
+                'is_new': bool,
+            })
 
-    def __get_balance_past(self, start, transactions):
-        # !!!
-        result = transactions.cumsum()
+            self.transactions = full_tr.reset_index(drop=True)
+
+    def __get_balance_past(self, start, amounts):
+        result = amounts.cumsum()
         return result + (start - result.iloc[-1])
 
-    def __get_balance_future(self, start, transactions):
-        # !!!
-        return transactions.cumsum() + start
+    def __get_balance_future(self, start, amounts):
+        return amounts.cumsum() + start
 
     def __drop_paired(self, data: pd.DataFrame, by: str):
-        # !!!
         sort_values = data[by].sort_values()
         abs_values = sort_values.abs()
         c1 = sort_values.groupby(abs_values).transform(pd.Series.cumsum) > 0
@@ -444,12 +494,10 @@ class User:
         return data[c1 | c2]
 
     def __drop_outliers(self, data, q=0.16):
-        # !!!
         data = data[data['amount'] > data['amount'].quantile(q)]
         return data
 
     def __get_default_parameters(self):
-        # !!!
         return {
             'target_column': 'amount',
             'column_adding_method': False,
@@ -464,7 +512,6 @@ class User:
         return sbs_model
 
     def __encoder_in_sum(self, data, target_column, sum_column, top_size, sort_ascending=True):
-        # !!!
         result = data.groupby(target_column)[sum_column].sum(
         ).sort_values(ascending=sort_ascending)[:top_size]
         result = {name: (top_size-i+1)/(top_size+1)
@@ -472,7 +519,6 @@ class User:
         return result
 
     def __encoder_in_count(self, data, target_column, top_size, sort_ascending=False):
-        # !!!
         result = data.groupby(target_column)[target_column].count(
         ).sort_values(ascending=sort_ascending)[:top_size]
         result = {name: (top_size-i+1)/(top_size+1)
@@ -480,7 +526,6 @@ class User:
         return result
 
     def __calculate_features(self, data, method):
-        # !!!
         data = data[['amount', 'category', 'description']]
 
         if method in ('sum', 'coumt_sum'):
@@ -502,9 +547,11 @@ class User:
         return data.drop(['category', 'description'], axis=1)
 
     def __get_markers_regular(self, data, event):
-        # !!!
         if event['search_f'] == 'description':
-            return data['description'] == event['arg_sf']
+            if ',' in event['arg_sf']:
+                return data['description'].isin(event['arg_sf'].split(','))
+            else:
+                return data['description'] == event['arg_sf']
 
         elif event['search_f'] == 'amount_description':
             return (data['description'] == event['arg_sf']) & (data['amount'] == event['amount'])
@@ -527,7 +574,6 @@ class User:
             f'The search function /"{event["search_f"]}/" does not exist')
 
     def __merge_of_predicts(self, predicted_events, predicted_transactions, start_balance):
-        # !!!
         merged_transactions = pd.concat([
             predicted_events.set_index('date')[['amount']],
             predicted_transactions

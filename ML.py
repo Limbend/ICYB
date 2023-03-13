@@ -52,7 +52,7 @@ class SbsModel:
 
         Args:
             old_data: уже известные данные за прошлый период.
-            end_date: дата, до которой рассчитать прогноз. Прогноз начнется со следующего дня после после old_data.
+            end_date: дата, до которой рассчитать прогноз. Прогноз начнется c следующего дня после после old_data.
             only_negative: итоговый прогноз будет обнуляться, если модель выдаст значения больше нуля.
 
         Returns:
@@ -61,8 +61,8 @@ class SbsModel:
         working_columns = self.models.keys()
         data = old_data[working_columns].copy()
         days_index = pd.date_range(data.index[-1], end_date)[1:]
-        data = old_data.append(pd.DataFrame(
-            [], columns=working_columns, index=days_index))
+        data = pd.concat(
+            [data, pd.DataFrame([], columns=working_columns, index=days_index)])
 
         for day in days_index:
             for column in working_columns:

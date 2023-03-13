@@ -147,7 +147,7 @@ def get_importances(sbs_model, X, random_state=GRS):
         y_working_columns = x[sbs_model.models.keys()]
         x = x.drop(sbs_model.models.keys(), axis=1)
 
-        # Говнокод! todo переделать
+        # Говнокод! TODO переделать
         feature_split = []
         for feature in list(x):
             split = feature.split(':')

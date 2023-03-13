@@ -4,7 +4,7 @@
     "trusted_chat_id": 111111111,
 
     "db_connector":{
-        "ip": "192.168.1.1",
+        "host": "192.168.1.1",
         "port": "5432",
         "user": "user",
         "password": "password",
