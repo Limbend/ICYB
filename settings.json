@@ -1,14 +1,14 @@
 {
-    "TEST-bot_token": "1111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "RELEASE-bot_token": "2222222222:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-    "trusted_chat_id": 111111111,
+  "TEST-bot_token": "1111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "RELEASE-bot_token": "2222222222:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+  "trusted_chat_id": 111111111,
 
-    "db_connector":{
-        "host": "192.168.1.1",
-        "port": "5432",
-        "user": "user",
-        "password": "password",
-        "db_name": "my_db",
-        "schema": "my_schema"
-    }
+  "db_connector": {
+    "host": "192.168.1.1",
+    "port": "5432",
+    "user": "user",
+    "password": "password",
+    "db_name": "my_db",
+    "schema": "my_schema"
+  }
 }
