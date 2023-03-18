@@ -15,7 +15,7 @@ class User:
         transactions: список транзакций.
         sbs_model: список моделей, под каждую фичу, для прогноза транзакций для этого пользователя.
         regular_list: список регулярных транзакций.
-        onetime_transactions: cписок разовых транзакций. 
+        onetime_transactions: список разовых транзакций. 
         predicted_events: рассчитанные регулярные и разовые транзакции до указанной даты.
         predicted_transactions: прогноз транзакций до указанной даты.
     '''
@@ -59,7 +59,7 @@ class User:
         '''Прогнозирует регулярные и одноразовые транзакции.
 
         Args:
-            start_date: дата c которой строить прогноз.
+            start_date: дата с которой строить прогноз.
             end_date: дата до которой строить прогноз.
 
         Returns:
@@ -321,10 +321,10 @@ class User:
                 r_event['end_date'] = min(r_event['end_date'], g_end_date)
 
             # Обновление цены
-            if(r_event['adjust_price']):
+            if (r_event['adjust_price']):
                 amounts = self.transactions[self.__get_markers_regular(
                     self.transactions, r_event)].tail(window_price)['amount']
-                if(len(amounts) > 0):
+                if (len(amounts) > 0):
                     if uniform_distribution:
                         r_event['amount'] = amounts.mean()
                     else:
@@ -333,7 +333,7 @@ class User:
                             amounts * [2 / (window_price + window_price**2) * (x + 1) for x in range(window_price)]).sum()
 
             # Обновление начальной даты
-            if(r_event['adjust_date']):
+            if (r_event['adjust_date']):
                 events = self.transactions[self.__get_markers_regular(
                     self.transactions, self.regular_list.loc[i])]
                 if len(events) > 0:
@@ -341,7 +341,7 @@ class User:
 
             j = 0
             new_start = r_event['start_date']  # + d_date * j
-            while(new_start < g_start_date and new_start < r_event['end_date']):
+            while (new_start < g_start_date and new_start < r_event['end_date']):
                 j += 1
                 if j == j_limit:
                     raise Exception(
@@ -350,10 +350,10 @@ class User:
                 new_start = r_event['start_date'] + d_date * j
 
             # Проверка на просрочку
-            if(r_event['follow_overdue'] and j > 0):
+            if (r_event['follow_overdue'] and j > 0):
                 pay_date_overdue = g_start_date + relativedelta(days=1)
 
-                if(r_event['adjust_date']):
+                if (r_event['adjust_date']):
                     # Если между стартовой датой для регулярки r_event['start_date'] и стартовой датой для начала поиска g_start_date помешаются регулярки - они являются просрочкой. Количество поместившихся будет в j.
                     for i_overdue in range(j):
                         result.append((
@@ -369,7 +369,7 @@ class User:
                     count_overdue = j - sum(self.__get_markers_regular(
                         self.transactions[self.transactions['date'] >= pd.to_datetime(r_event['start_date'])], r_event))
                     # Если число положительное, то есть просрочки.
-                    if(count_overdue > 0):
+                    if (count_overdue > 0):
                         for i_overdue in range(count_overdue):
                             result.append((
                                 pay_date_overdue,
@@ -380,13 +380,13 @@ class User:
                             ))
 
                     # Если отрицательное, то есть оплата зарание. Нужно обновить стартовую дату.
-                    elif(count_overdue < 0):
+                    elif (count_overdue < 0):
                         new_start = r_event['start_date'] + \
                             d_date * (j - count_overdue)
 
             j = 0
             date = new_start  # + d_date * j
-            while(date < r_event['end_date']):
+            while (date < r_event['end_date']):
                 result.append((
                     date,
                     r_event['amount'],

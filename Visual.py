@@ -11,7 +11,7 @@ import io
 FORMATTERS = {
     'date': lambda x: x.strftime('%d.%m.%Y'),
     'start_date': lambda x: x.strftime('%d.%m.%Y'),
-    'end_date': lambda x: x.strftime('%d.%m.%Y') if not(pd.isna(x)) else 'NaT',
+    'end_date': lambda x: x.strftime('%d.%m.%Y') if not (pd.isna(x)) else 'NaT',
     'amount': "{:.2f}".format,
     # 'description': "{:<17}".format,
 }
@@ -30,7 +30,7 @@ def transactions_plot(transactions):
               transactions.index[-1], color='r', linewidth=3, linestyle='--')
     ax.text(
         transactions.head(1).index,
-        transactions['balance'].min()*.7,
+        transactions['balance'].min(),
         f"Минимальный баланс: {transactions['balance'].min():.2f}   ({transactions[transactions['balance'] == transactions['balance'].min()].index[0]:%d.%m.%Y})",
         color='w',
         backgroundcolor='b'
@@ -141,7 +141,7 @@ def predict_info(events, predicted_transactions):
 
 
 HELP_MESSAGE = {
-    '/regular add': 'Для добавления новой регулярной транзакции введите команду <code>/regular add</code>, а затем, через пробел, укажите:\nначальную дату или начальную-конечную дату\nчерез запятую, без пробела, количество лет, месяцев и дней между транзакциями\nкомментарий\nсумму\n\nПример:\n<pre>/regular add 30.12.2200-30.12.3001 0,1,0 -6500.00 "Расрочка за холодильник"</pre>\n<pre>/regular add 30.12 0,0,30 -450 "Мобильная связь"</pre>',
+    '/regular add': 'Для добавления новой регулярной транзакции введите команду <code>/regular add</code>, а затем, через пробел, укажите:\nначальную дату или начальную-конечную дату\nчерез запятую, без пробела, количество лет, месяцев и дней между транзакциями\nкомментарий\nсумму\n\nПример:\n<pre>/regular add 30.12.2200-30.12.3001 0,1,0 -6500.00 "Рассрочка за холодильник"</pre>\n<pre>/regular add 30.12 0,0,30 -450 "Мобильная связь"</pre>',
     '/regular del': 'Для удаления регулярной транзакции введите команду <code>/regular del</code>, а затем, укажите номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/regular del 17</pre>\n<pre>/regular del 17,18,25</pre>',
 
     '/onetime add': 'Для добавления новой разовой транзакции введите команду <code>/onetime add</code>, а затем, через пробел, укажите дату, сумму и комментарий.\n\nПример:\n<pre>/onetime add 30.12.2200 -652.50 "Вернуть долг"</pre>',

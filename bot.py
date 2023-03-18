@@ -22,8 +22,6 @@ L_TYPE = os.getenv('ICYB_L_TYPE', 'TEST')
 with open('./settings.np.json') as f:
     settings = json.load(f)
 
-manager = UserManager(settings['db_connector'])
-
 
 def ping(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(
@@ -86,5 +84,6 @@ updater.dispatcher.add_handler(
 updater.dispatcher.add_handler(MessageHandler(Filters.text, message))
 updater.dispatcher.add_handler(CallbackQueryHandler(keyboard_callback))
 
+manager = UserManager(updater.bot, settings['db_connector'])
 updater.start_polling()
 updater.idle()

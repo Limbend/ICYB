@@ -1,8 +1,4 @@
-# import numpy as np
 import pandas as pd
-# import psycopg2
-# from psycopg2.sql import SQL, Identifier
-# from psycopg2.extensions import AsIs
 import sqlalchemy as sqla
 import pickle
 import re
@@ -24,11 +20,11 @@ def tinkoff_file_parse(path, db_engine, user_id, account_id=-1):
         pass
     else:
         df = df[[
-        'Дата операции',
-        'Сумма платежа',
-        'Категория',
-        'Описание'
-    ]]
+            'Дата операции',
+            'Сумма платежа',
+            'Категория',
+            'Описание'
+        ]]
 
     df_for_sql = df.reindex(index=df.index[::-1]).reset_index(drop=True)
     df_for_sql.columns = ['date', 'amount', 'category', 'description']
@@ -246,6 +242,14 @@ class DB_Engine:
         self.connector.execute(
             self.sql_queries['update_'+table], {'db_id': db_id, column: value})
 
+    def get_users_for_notifications(self):
+        result = self.connector.execute(sqla.sql.text(
+            f"SELECT user_id FROM {self.schema}.regular \
+                WHERE end_date IS null OR end_date > now() \
+                    UNION SELECT user_id FROM {self.schema}.onetime \
+                        WHERE date > now()"))
+        return [r for r, in result]
+
     def __read_sql(self, quory_name: str, values: dict, parse_dates=None, drop_uid=True):
         data = pd.read_sql(
             sql=self.sql_queries[quory_name],
@@ -253,7 +257,7 @@ class DB_Engine:
             params=values,
             parse_dates=parse_dates
         ).reset_index(drop=True).rename(columns={'id': 'db_id'})
-        
+
         if drop_uid:
             return data.drop('user_id', axis=1)
         return data

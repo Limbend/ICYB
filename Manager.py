@@ -1,7 +1,8 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram.ext.updater import Bot
 import DataLoader as dl
 import shlex
-import time
+from dateutil.relativedelta import relativedelta
 from datetime import date, datetime
 import Visual
 from Users import User
@@ -209,7 +210,7 @@ class BotDialogRegular(BotDialog):
                         return
                     else:
                         self.reply_table(
-                            update, only_relevant=not(command[2] == 'all'))
+                            update, only_relevant=not (command[2] == 'all'))
                         return
                 else:
                     self.reply_table(update)
@@ -511,10 +512,11 @@ class UserManager:
 
     '''
 
-    def __init__(self, db_settings):
+    def __init__(self, bot, db_settings):
         self.db_engine = dl.DB_Engine(**db_settings)
         self.user_dict = {}
         self.bot_dialog_dict = {}
+        self.bot = bot
 
     def get_user(self, user_id):
         '''Ищет и возвращает объект пользователя по его id
@@ -546,7 +548,7 @@ class UserManager:
 
         if user_id in self.bot_dialog_dict:
             bot_dialog = self.bot_dialog_dict[user_id]
-            if cmd[0] == '/' and not(bot_dialog.is_suitable(cmd)):
+            if cmd[0] == '/' and not (bot_dialog.is_suitable(cmd)):
                 bot_dialog = self.__create_bot_dialog(cmd, user)
                 self.bot_dialog_dict[user_id] = bot_dialog
         else:
@@ -633,6 +635,20 @@ class UserManager:
         cmd = update.callback_query.data.split(' ')
         self.get_dialog(user_id, cmd[0]).keyboard_callback(
             update, self.db_engine)
+
+    def daily_notice(self):
+        print("daily_notice по расписанию")
+        users_id = self.db_engine.get_users_for_notifications()
+        for id in users_id:
+            user = self.get_user(id)
+            events_today = user.predict_events(
+                datetime.today() - relativedelta(days=1), datetime.today())
+            print(events_today)
+            events_today = events_today.set_index('date')
+
+            print(events_today)
+            self.bot.send_message(id, Visual.show_events(
+                events_today), parse_mode='html')
 
     def __create_bot_dialog(self, cmd, user):
         if cmd == '/regular':
