@@ -1,5 +1,4 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
-from telegram.ext.updater import Bot
 import DataLoader as dl
 import shlex
 from dateutil.relativedelta import relativedelta
@@ -30,17 +29,17 @@ class BotDialog:
         else:
             return self.cmd_mask
 
-    def reply_help(self, message: Message, cmd, edit_text=False, **kwargs):
+    async def reply_help(self, message: Message, cmd, edit_text=False, **kwargs):
         text = Visual.reply_help(' '.join([self.get_cmd_mask(), cmd]))
 
         if edit_text:
-            message.edit_text(
+            await message.edit_text(
                 text=text, parse_mode='html', **kwargs)
         else:
-            message.reply_text(
+            await message.reply_text(
                 text=text, quote=True, parse_mode='html', **kwargs)
 
-    def reply_error(self, message: Message, path, error_message, edit_text=False, **kwargs):
+    async def reply_error(self, message: Message, path, error_message, edit_text=False, **kwargs):
         if path == '':
             text = f'{self.get_cmd_mask()}: {error_message}'
         else:
@@ -48,10 +47,10 @@ class BotDialog:
         text = Visual.reply_error(text)
 
         if edit_text:
-            message.edit_text(
+            await message.edit_text(
                 text=text, parse_mode='html', **kwargs)
         else:
-            message.reply_text(
+            await message.reply_text(
                 text=text, quote=True, parse_mode='html', **kwargs)
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
@@ -99,28 +98,28 @@ class BotDialogRegular(BotDialog):
             # 'follow_overdue': ''
         }
 
-    def reply_table(self, update: Update, columns=['description', 'amount'], only_relevant=True):
-        update.message.reply_text(
+    async def reply_table(self, update: Update, columns=['description', 'amount'], only_relevant=True):
+        await update.message.reply_text(
             text=Visual.show_regular(
                 self.user.regular_list, only_relevant, columns),
             quote=False, parse_mode='html')
 
-    def reply_row(self, update: Update, index,
-                  columns=[
-                      'description',
-                      'search_f',
-                      'arg_sf',
-                      'amount',
-                      'start_date',
-                      'end_date',
-                      'd_years',
-                      'd_months',
-                      'd_days',
-                      'adjust_price',
-                      'adjust_date',
-                      'follow_overdue'
-                  ]):
-        update.message.reply_text(
+    async def reply_row(self, update: Update, index,
+                        columns=[
+                            'description',
+                            'search_f',
+                            'arg_sf',
+                            'amount',
+                            'start_date',
+                            'end_date',
+                            'd_years',
+                            'd_months',
+                            'd_days',
+                            'adjust_price',
+                            'adjust_date',
+                            'follow_overdue'
+                        ]):
+        await update.message.reply_text(
             text=Visual.show_regular(
                 self.user.regular_list, False, columns, index),
             quote=False, parse_mode='html')
@@ -181,23 +180,23 @@ class BotDialogRegular(BotDialog):
             db_engine, [int(s) for s in cmd[0].split(',')])
         self.reply_table(update)
 
-    def reply_edit(self, update: Update, cmd: list, db_engine: dl.DB_Engine, message: Message = None):
+    async def reply_edit(self, update: Update, cmd: list, db_engine: dl.DB_Engine, message: Message = None):
         if len(cmd) < 1:
             self.reply_help(update.message, 'edit')
 
         elif len(cmd) == 1:
             # if hasattr(update, 'callback_query'):
             if not update.callback_query is None:
-                update.callback_query.message.edit_text(
+                await update.callback_query.message.edit_text(
                     text='Что изменить у этой транзакции', reply_markup=self.__get_edit_menu(id_event=int(cmd[0])))
             else:
-                update.message.reply_text(
+                await update.message.reply_text(
                     text='Что изменить у этой транзакции', reply_markup=self.__get_edit_menu(id_event=int(cmd[0])))
 
         elif len(cmd) == 2:
             self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+    async def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
         command = BotDialog.new_message(self, update, db_engine, command)
         if command == False:
             return
@@ -229,7 +228,7 @@ class BotDialogRegular(BotDialog):
                 return
 
         else:
-            self.reply_table(update)
+            await self.reply_table(update)
             return
 
     # def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
@@ -250,7 +249,7 @@ class BotDialogRegular(BotDialog):
 
         return keyboard_markup
 
-    def __reply_edit_parameter(self, update: Update, id_event, parameter):
+    async def __reply_edit_parameter(self, update: Update, id_event, parameter):
         self.wait_answer_func = self.__edit_parameter
         self.wait_answer_kwargs = {'id_event': id_event,
                                    'parameter': parameter}
@@ -261,7 +260,7 @@ class BotDialogRegular(BotDialog):
 
         # if hasattr(update, 'callback_query'):
         if not update.callback_query is None:
-            update.callback_query.message.edit_text(
+            await update.callback_query.message.edit_text(
                 text=f'{self.parameters[parameter]}\n\nТекущее значение: {self.user.regular_list.loc[id_event,parameter]}', reply_markup=keyboard_markup)
 
         else:
@@ -287,14 +286,14 @@ class BotDialogOnetime(BotDialogRegular):
             'amount': 'Сумма\nВ формате: 1000.00',
         }
 
-    def reply_table(self, update: Update, columns=['description', 'date', 'amount'], only_relevant=True):
-        update.message.reply_text(
+    async def reply_table(self, update: Update, columns=['description', 'date', 'amount'], only_relevant=True):
+        await update.message.reply_text(
             text=Visual.show_onetime(
                 self.user.onetime_transactions, only_relevant, columns),
             quote=False, parse_mode='html')
 
-    def reply_row(self, update: Update, index, columns=['description', 'date', 'amount']):
-        update.message.reply_text(
+    async def reply_row(self, update: Update, index, columns=['description', 'date', 'amount']):
+        await update.message.reply_text(
             text=Visual.show_onetime(
                 self.user.onetime_transactions, False, columns, index),
             quote=False, parse_mode='html')
@@ -337,14 +336,14 @@ class BotDialogAccounts(BotDialogOnetime):
             'discharge_day': 'День выписки\nЦелое число',
         }
 
-    def reply_table(self, update: Update, columns=['type', 'description', 'credit_limit', 'discharge_day']):
-        update.message.reply_text(
+    async def reply_table(self, update: Update, columns=['type', 'description', 'credit_limit', 'discharge_day']):
+        await update.message.reply_text(
             text=Visual.show_accounts(
                 self.user.accounts, columns),
             quote=False, parse_mode='html')
 
-    def reply_row(self, update: Update, index, columns=['type', 'description', 'credit_limit', 'discharge_day']):
-        update.message.reply_text(
+    async def reply_row(self, update: Update, index, columns=['type', 'description', 'credit_limit', 'discharge_day']):
+        await update.message.reply_text(
             text=Visual.show_accounts(
                 self.user.onetime_transactions, columns, index),
             quote=False, parse_mode='html')
@@ -418,7 +417,7 @@ class BotDialogTransactions(BotDialog):
         BotDialog.__init__(self, user)
         self.cmd_mask = ['/transactions', '/tr']
 
-    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine, file_received=None):
+    async def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine, file_received=None):
         if len(self.user.accounts) == 0:
             keyboard_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton('Создать счет', callback_data='/accounts add')]])
@@ -486,9 +485,9 @@ class BotDialogTransactions(BotDialog):
             db_engine, path, account_id, dl.amount_parser(new_balance))
         comparison_data = self.user.get_comparison_data()
 
-        message.reply_text(
+        await message.reply_text(
             text=Visual.successful_adding_transactions(transactions), quote=True)
-        message.reply_photo(
+        await message.reply_photo(
             photo=Visual.comparison_plot(comparison_data), quote=False)
 
     def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
@@ -627,9 +626,9 @@ class UserManager:
     #     user = self.get_user(user_id)
     #     return Visual.show_onetime(user.onetime_transactions, only_relevant)
 
-    def bot_dialog(self, user_id, update):
-        self.get_dialog(user_id, update.message.text.split(' ')
-                        [0]).new_message(update, self.db_engine)
+    async def bot_dialog(self, user_id, update):
+        await self.get_dialog(user_id, update.message.text.split(' ')
+                              [0]).new_message(update, self.db_engine)
 
     def bot_dialog_keyboard(self, user_id, update):
         cmd = update.callback_query.data.split(' ')
