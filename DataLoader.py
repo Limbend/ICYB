@@ -50,7 +50,7 @@ def ru_datetime_parser(string):
     l = len(string)
     string = string.replace(',', '.')
     dotC = string.count('.')
-    сolonC = string.count(':')
+    colonC = string.count(':')
 
     if 4 <= l <= 5 and dotC == 1:
         result = datetime.strptime(string, '%d.%m').replace(
@@ -60,12 +60,12 @@ def ru_datetime_parser(string):
     elif 8 <= l <= 10 and dotC == 2:
         result = datetime.strptime(string, '%d.%m.%Y')
 
-    elif 7 <= l <= 11 and dotC == 1 and сolonC == 1:
+    elif 7 <= l <= 11 and dotC == 1 and colonC == 1:
         result = datetime.strptime(string, '%d.%m %H:%M').replace(
             year=datetime.today().year)
-    elif 10 <= l <= 14 and dotC == 2 and сolonC == 1:
+    elif 10 <= l <= 14 and dotC == 2 and colonC == 1:
         result = datetime.strptime(string, '%d.%m.%y %H:%M')
-    elif l == 16 and dotC == 2 and сolonC == 1:
+    elif l == 16 and dotC == 2 and colonC == 1:
         result = datetime.strptime(string, '%d.%m.%Y %H:%M')
 
     else:

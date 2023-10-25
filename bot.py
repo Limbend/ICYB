@@ -31,7 +31,7 @@ async def ping(update: Update, context: CallbackContext) -> None:
 async def reset(update: Update, context: CallbackContext) -> None:
     if update.message.from_user.id == settings['trusted_chat_id']:
         global manager
-        manager = UserManager(settings['db_connector'])
+        manager = UserManager(app.bot, settings['db_connector'])
 
 
 async def forecast(update: Update, context: CallbackContext) -> None:

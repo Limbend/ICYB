@@ -53,7 +53,7 @@ class BotDialog:
             await message.reply_text(
                 text=text, quote=True, parse_mode='html', **kwargs)
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+    async def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
         if command == '':
             command = shlex.split(update.message.text)
 
@@ -64,7 +64,7 @@ class BotDialog:
                 if 'prefix_command' in self.wait_answer_kwargs:
                     command = self.wait_answer_kwargs.pop(
                         'prefix_command') + command
-                self.wait_answer_func(
+                await self.wait_answer_func(
                     update, command, db_engine, **self.wait_answer_kwargs)
                 return False
         else:
@@ -72,10 +72,10 @@ class BotDialog:
                 command.insert(0, '\\')
         return command
 
-    def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
+    async def keyboard_callback(self, update: Update, db_engine: dl.DB_Engine):
         cmd = shlex.split(update.callback_query.data)
-        update.message = update.effective_message
-        self.new_message(update, db_engine, cmd)
+        # update.message = update.effective_message
+        await self.new_message(update, db_engine, cmd)
 
 
 class BotDialogRegular(BotDialog):
@@ -197,7 +197,7 @@ class BotDialogRegular(BotDialog):
             self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
 
     async def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
-        command = BotDialog.new_message(self, update, db_engine, command)
+        command = await BotDialog.new_message(self, update, db_engine, command)
         if command == False:
             return
 
@@ -261,7 +261,7 @@ class BotDialogRegular(BotDialog):
         # if hasattr(update, 'callback_query'):
         if not update.callback_query is None:
             await update.callback_query.message.edit_text(
-                text=f'{self.parameters[parameter]}\n\nТекущее значение: {self.user.regular_list.loc[id_event,parameter]}', reply_markup=keyboard_markup)
+                text=f'{self.parameters[parameter]}\n\nТекущее значение: {self.user.regular_list.loc[id_event, parameter]}', reply_markup=keyboard_markup)
 
         else:
             raise Exception(
@@ -421,27 +421,27 @@ class BotDialogTransactions(BotDialog):
         if len(self.user.accounts) == 0:
             keyboard_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton('Создать счет', callback_data='/accounts add')]])
-            self.reply_error(update.message, 'add', 'accounts empty',
-                             reply_markup=keyboard_markup)
+            await self.reply_error(update.message, 'add', 'accounts empty',
+                                   reply_markup=keyboard_markup)
             return
 
         if file_received is None:
             if not update.callback_query is None and update.callback_query.message.reply_to_message is None:
                 message = update.callback_query.message.reply_to_message
-            elif not update.message.reply_to_message is None:
-                message = update.message.reply_to_message
+            elif not update.effective_message.reply_to_message is None:
+                message = update.effective_message.reply_to_message
             else:
                 message = update.message
             if not message.document is None:
                 file_received = message.document
             else:
-                self.reply_error(update.message, 'add', 'file empty')
+                await self.reply_error(update.message, 'add', 'file empty')
                 return
         else:
             message = update.message
 
         if len(cmd) < 1:
-            self.reply_error(update.message, 'add', 'balance empty')
+            await self.reply_error(update.message, 'add', 'balance empty')
             return
 
         new_balance = cmd[0]
@@ -455,8 +455,8 @@ class BotDialogTransactions(BotDialog):
             keyboard_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton(account_name, callback_data=f'{self.get_cmd_mask()} add \'{new_balance}\' {account_name}')]
                  for account_name in self.user.accounts['description']])
-            self.reply_error(message, 'add', 'account not selected',
-                             reply_markup=keyboard_markup)
+            await self.reply_error(message, 'add', 'account not selected',
+                                   reply_markup=keyboard_markup)
             return
 
         account = self.user.accounts['description'] == cmd[1]
@@ -474,13 +474,14 @@ class BotDialogTransactions(BotDialog):
                 keyboard_markup = InlineKeyboardMarkup(
                     [[InlineKeyboardButton(account_name, callback_data=f'\'{new_balance}\' {account_name}')]
                      for account_name in self.user.accounts['description']])
-                self.reply_error(message, 'add', 'account not found',
-                                 reply_markup=keyboard_markup)
+                await self.reply_error(message, 'add', 'account not found',
+                                       reply_markup=keyboard_markup)
                 return
 
-        path = './temp/' + file_received.file_name
+        path = f'./temp/{self.user.id}---{file_received.file_name}'
         # TODO Обработать исключение неудачной загрузки
-        file_received.get_file().download(custom_path=path)
+        file = await file_received.get_file()
+        await file.download_to_drive(custom_path=path)
         transactions = self.user.load_from_file(
             db_engine, path, account_id, dl.amount_parser(new_balance))
         comparison_data = self.user.get_comparison_data()
@@ -490,14 +491,14 @@ class BotDialogTransactions(BotDialog):
         await message.reply_photo(
             photo=Visual.comparison_plot(comparison_data), quote=False)
 
-    def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
-        command = BotDialog.new_message(self, update, db_engine, command)
+    async def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
+        command = await BotDialog.new_message(self, update, db_engine, command)
         if command == False:
             return
 
         if len(command) > 1:
             if command[1] == 'add':
-                self.reply_add(update, command[2:], db_engine)
+                await self.reply_add(update, command[2:], db_engine)
                 return
 
 
@@ -616,24 +617,14 @@ class UserManager:
             'message': Visual.predict_info(events, self.get_user(user_id).predicted_transactions)
         }
 
-    # def show_onetime(self, user_id, only_relevant=True):
-    #     '''Добавляет однократное событие.
-
-    #     Args:
-    #         user_id: id пользователя.
-    #         only_relevant: если True, вернет только будущие собития.
-    #     '''
-    #     user = self.get_user(user_id)
-    #     return Visual.show_onetime(user.onetime_transactions, only_relevant)
-
     async def bot_dialog(self, user_id, update):
-        await self.get_dialog(user_id, update.message.text.split(' ')
-                              [0]).new_message(update, self.db_engine)
+        dialog = self.get_dialog(user_id, update.message.text.split(' ')[0])
+        await dialog.new_message(update, self.db_engine)
 
-    def bot_dialog_keyboard(self, user_id, update):
+    async def bot_dialog_keyboard(self, user_id, update):
         cmd = update.callback_query.data.split(' ')
-        self.get_dialog(user_id, cmd[0]).keyboard_callback(
-            update, self.db_engine)
+        dialog = self.get_dialog(user_id, cmd[0])
+        await dialog.keyboard_callback(update, self.db_engine)
 
     def daily_notice(self):
         print("daily_notice по расписанию")
