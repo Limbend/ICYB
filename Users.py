@@ -139,7 +139,12 @@ class User:
         self.predicted_transactions = self.sbs_model.predict(
             data, end_date).to_frame()
 
-        return self.__merge_of_predicts(self.predicted_events, self.predicted_transactions, self.transactions['balance'].iloc[-1])
+        primary_account_id = self.accounts[
+            self.accounts['type'] == 1]['db_id'][0]
+        account_balance = self.transactions[
+            self.transactions['account_id'] == primary_account_id]['balance'].iloc[-1]
+
+        return self.__merge_of_predicts(self.predicted_events, self.predicted_transactions, account_balance)
 
     def fit_new_model(self, db_engine):
         '''Создает, учит и сохраняет модель для пользователя.
