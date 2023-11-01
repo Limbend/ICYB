@@ -81,7 +81,7 @@ app.add_handler(CommandHandler('ping', ping))
 app.add_handler(CommandHandler('reset', reset))
 app.add_handler(CommandHandler('refit', refit))
 app.add_handler(
-    CommandHandler(['regular', 'onetime', 'accounts', 'transactions', 'tr'], bot_dialog))
+    CommandHandler(['help', 'regular', 're', 'onetime', 'on', 'accounts', 'ac', 'transactions', 'tr'], bot_dialog))
 app.add_handler(MessageHandler(filters.TEXT, message))
 app.add_handler(CallbackQueryHandler(keyboard_callback))
 manager = UserManager(app.bot, settings['db_connector'])

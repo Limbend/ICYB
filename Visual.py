@@ -141,12 +141,15 @@ def predict_info(events, predicted_transactions):
 
 
 HELP_MESSAGE = {
+    '/help': 'Доступные команды для бота:\n<code>/help</code> - Данная справка\n<code>/pred</code> - Прогноз транзакций\n<code>/re</code> или <code>/regular</code> - Регулярные транзакции\n<code>/on</code> или <code>/onetime</code> - Разовые транзакции\n<code>/tr</code> или <code>/transactions</code> - Транзакции\n<code>/ac</code> или <code>/accounts</code> - Счета\n\nДля получения дополнительный информации добавьте <code>help</code> в конце команды.',
+
+    '/regular': 'Регулярные транзакции\n<code>/regular show [all]</code> - Отобразить список [всех] транзакций\n<code>/regular show &#60;id&#62;</code> - Отобразить информацию по транзакции\n<code>/regular add</code> - Добавить новую транзакцию\n<code>/regular edit &#60;id&#62;</code> - Изменить транзакцию\n<code>/regular del &#60;id&#62;[,id]</code> - Удалить транзакцию',
     '/regular add': 'Для добавления новой регулярной транзакции введите команду <code>/regular add</code>, а затем, через пробел, укажите:\nначальную дату или начальную-конечную дату\nчерез запятую, без пробела, количество лет, месяцев и дней между транзакциями\nкомментарий\nсумму\n\nПример:\n<pre>/regular add 30.12.2200-30.12.3001 0,1,0 -6500.00 "Рассрочка за холодильник"</pre>\n<pre>/regular add 30.12 0,0,30 -450 "Мобильная связь"</pre>',
-    '/regular del': 'Для удаления регулярной транзакции введите команду <code>/regular del</code>, а затем, укажите номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/regular del 17</pre>\n<pre>/regular del 17,18,25</pre>',
+    '/regular del': 'Для удаления регулярной транзакции введите команду <code>/regular del</code>, указав номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/regular del 17</pre>\n<pre>/regular del 17,18,25</pre>',
 
+    '/onetime': 'Регулярные транзакции\n<code>/onetime show [all]</code> - Отобразить список [всех] транзакций\n<code>/onetime show &#60;id&#62;</code> - Отобразить информацию по транзакции\n<code>/onetime add</code> - Добавить новую транзакцию\n<code>/onetime edit &#60;id&#62;</code> - Изменить транзакцию\n<code>/onetime del &#60;id&#62;[,id]</code> - Удалить транзакцию',
     '/onetime add': 'Для добавления новой разовой транзакции введите команду <code>/onetime add</code>, а затем, через пробел, укажите дату, сумму и комментарий.\n\nПример:\n<pre>/onetime add 30.12.2200 -652.50 "Вернуть долг"</pre>',
-    '/onetime del': 'Для удаления разовой транзакции введите команду <code>/onetime del</code>, а затем, укажите номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/onetime del 17</pre>\n<pre>/onetime del 17,18,25</pre>',
-
+    '/onetime del': 'Для удаления разовой транзакции введите команду <code>/onetime del &#60;id&#62;[,id]</code>, указав номер транзакции или несколько номеров, через запятую, без пробелов.\n\nПример:\n<pre>/onetime del 17</pre>\n<pre>/onetime del 17,18,25</pre>',
 }
 
 

@@ -292,11 +292,13 @@ class User:
             id).reset_index(drop=True)
 
     def edit_regular(self, db_engine, id, parameter: str, new_value):
-        '''Удаляет регулярное событие.
+        '''Изменяет регулярное событие.
 
         Args:
             db_engine: объект для работы с базой данных.
             id: локальный id события, которое нужно удалить.
+            parameter: параметр, который требуется изменить.
+            new_value: новое значение для параметра.
         '''
         db_id = str(self.regular_list.loc[id, 'db_id'])
         db_engine.edit_event('regular', db_id, parameter, new_value)
