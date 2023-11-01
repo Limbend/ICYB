@@ -68,6 +68,10 @@ class BotDialog:
                     update, command, db_engine, **self.wait_answer_kwargs)
                 return False
         else:
+            if len(command) > 1 and command[1] == 'help':
+                await self.reply_help(update.message, '')
+                return False
+
             if command[0][0] not in ['\\', '/']:
                 command.insert(0, '\\')
         return command
@@ -89,7 +93,7 @@ class BotDialogRegular(BotDialog):
             # 'arg_sf': '',
             'amount': 'Сумма\nВ формате: 1000.00',
             'start_date': 'Начальная дата\nВ формате: 30.12.2200',
-            'end_date': 'Начальная дата\nВ формате: 30.12.2200',
+            'end_date': ' Конечная дата\nВ формате: 30.12.2200',
             'd_years': 'Количество лет между транзакциями\nЦелое число',
             'd_months': 'Количество месяцев между транзакциями\nЦелое число',
             'd_days': 'Количество дней между транзакциями\nЦелое число',
@@ -124,9 +128,9 @@ class BotDialogRegular(BotDialog):
                 self.user.regular_list, False, columns, index),
             quote=False, parse_mode='html')
 
-    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(cmd) < 4 or cmd[0] == 'help':
-            self.reply_help(update.message, 'add')
+            await self.reply_help(update.message, 'add')
             return
 
         if '-' in cmd[0]:
@@ -134,18 +138,18 @@ class BotDialogRegular(BotDialog):
             start_date = dl.ru_datetime_parser(date[0])
             end_date = dl.ru_datetime_parser(date[1])
             if start_date == 'NaT' or end_date == 'NaT':
-                self.reply_help(update.message, 'add')
+                await self.reply_help(update.message, 'add')
                 return
         else:
             start_date = dl.ru_datetime_parser(cmd[0])
             end_date = None
             if start_date == 'NaT':
-                self.reply_help(update.message, 'add')
+                await self.reply_help(update.message, 'add')
                 return
 
         delta = [int(s) for s in cmd[1].split(',')]
         if len(delta) != 3:
-            self.reply_help(update.message, 'add')
+            await self.reply_help(update.message, 'add')
             return
 
         amount = dl.amount_parser(cmd[2])
@@ -170,19 +174,19 @@ class BotDialogRegular(BotDialog):
 
         self.user.add_regular(db_engine, start_date, end_date, delta,
                               description, amount, search_f, arg_sf, adjust_price, adjust_date, follow_overdue)
-        self.reply_row(update, self.user.regular_list.index[-1])
+        await self.reply_row(update, self.user.regular_list.index[-1])
 
-    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(cmd) < 1 or cmd[0] == 'help':
-            self.reply_help(update.message, 'del')
+            await self.reply_help(update.message, 'del')
             return
         self.user.delete_regular(
             db_engine, [int(s) for s in cmd[0].split(',')])
-        self.reply_table(update)
+        await self.reply_table(update)
 
     async def reply_edit(self, update: Update, cmd: list, db_engine: dl.DB_Engine, message: Message = None):
-        if len(cmd) < 1:
-            self.reply_help(update.message, 'edit')
+        if len(cmd) < 1 or (len(cmd) == 1 and cmd[0] == 'help'):
+            await self.reply_help(update.message, 'edit')
 
         elif len(cmd) == 1:
             # if hasattr(update, 'callback_query'):
@@ -194,7 +198,7 @@ class BotDialogRegular(BotDialog):
                     text='Что изменить у этой транзакции', reply_markup=self.__get_edit_menu(id_event=int(cmd[0])))
 
         elif len(cmd) == 2:
-            self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
+            await self.__reply_edit_parameter(update, int(cmd[0]), cmd[1])
 
     async def new_message(self, update: Update, db_engine: dl.DB_Engine, command=''):
         command = await BotDialog.new_message(self, update, db_engine, command)
@@ -205,26 +209,26 @@ class BotDialogRegular(BotDialog):
             if command[1] == 'show':
                 if len(command) == 3:
                     if command[2].isdigit():
-                        self.reply_row(update, int(command[2]))
+                        await self.reply_row(update, int(command[2]))
                         return
                     else:
-                        self.reply_table(
+                        await self.reply_table(
                             update, only_relevant=not (command[2] == 'all'))
                         return
                 else:
-                    self.reply_table(update)
+                    await self.reply_table(update)
                     return
 
             elif command[1] == 'add':
-                self.reply_add(update, command[2:], db_engine)
+                await self.reply_add(update, command[2:], db_engine)
                 return
 
             elif command[1] == 'del':
-                self.reply_delete(update, command[2:], db_engine)
+                await self.reply_delete(update, command[2:], db_engine)
                 return
 
             elif command[1] == 'edit':
-                self.reply_edit(update, command[2:], db_engine)
+                await self.reply_edit(update, command[2:], db_engine)
                 return
 
         else:
@@ -267,12 +271,15 @@ class BotDialogRegular(BotDialog):
             raise Exception(
                 f"The {update.__class__} does not have an atrebut 'callback_query'. The algorithm without a keyboard has not yet been implemente")
 
-    def __edit_parameter(self, update: Update, cmd: list, db_engine: dl.DB_Engine, id_event, parameter):
+    async def __edit_parameter(self, update: Update, cmd: list, db_engine: dl.DB_Engine, id_event, parameter):
         try:
+            value = update.message.text
+            if parameter in ['start_date', 'end_date']:
+                value = dl.ru_datetime_parser(update.message.text)
             self.user.edit_regular(db_engine, id_event,
-                                   parameter, update.message.text)
+                                   parameter, value)
         except ValueError:
-            self.__reply_edit_parameter(update, id_event, parameter)
+            await self.__reply_edit_parameter(update, id_event, parameter)
 
 
 class BotDialogOnetime(BotDialogRegular):
@@ -298,14 +305,14 @@ class BotDialogOnetime(BotDialogRegular):
                 self.user.onetime_transactions, False, columns, index),
             quote=False, parse_mode='html')
 
-    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(cmd) != 3 or cmd[0] == 'help':
-            self.reply_help(update.message, 'add')
+            await self.reply_help(update.message, 'add')
             return
 
         date = dl.ru_datetime_parser(cmd[0])
         if date == 'NaT':
-            self.reply_help(update.message, 'add')
+            await self.reply_help(update.message, 'add')
             return
 
         amount = dl.amount_parser(cmd[1])
@@ -313,15 +320,15 @@ class BotDialogOnetime(BotDialogRegular):
         description = cmd[2]
 
         self.user.add_onetime(db_engine, date, amount, description)
-        self.reply_row(update, self.user.onetime_transactions.index[-1])
+        await self.reply_row(update, self.user.onetime_transactions.index[-1])
 
-    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(cmd) < 1 or cmd[0] == 'help':
-            self.reply_help(update.message, 'del')
+            await self.reply_help(update.message, 'del')
             return
         self.user.delete_onetime(
             db_engine, [int(s) for s in cmd[0].split(',')])
-        self.reply_table(update)
+        await self.reply_table(update)
 
 
 class BotDialogAccounts(BotDialogOnetime):
@@ -348,25 +355,25 @@ class BotDialogAccounts(BotDialogOnetime):
                 self.user.onetime_transactions, columns, index),
             quote=False, parse_mode='html')
 
-    def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_add(self, update: Update, cmd, db_engine: dl.DB_Engine):
         if len(cmd) == 1 and cmd[0] == 'help':
-            self.reply_help(update.message, 'add')
+            await self.reply_help(update.message, 'add')
         elif len(cmd) == 0:
-            self.__set_account_description(update)
+            await self.__set_account_description(update)
         elif len(cmd) == 1:
-            self.__set_account_type(update, cmd[0])
+            await self.__set_account_type(update, cmd[0])
         elif len(cmd) == 2 and cmd[1] == 'debit':
             self.user.add_accounts(
                 db_engine, account_type=1, description=cmd[0])
         elif len(cmd) == 2 and cmd[1] == 'credit':
-            self.__set_credit_limit(update, cmd[0])
+            await self.__set_credit_limit(update, cmd[0])
         elif len(cmd) == 3 and cmd[1] == 'credit':
-            self.__set_discharge_day(update, cmd[0], cmd[2])
+            await self.__set_discharge_day(update, cmd[0], cmd[2])
         elif len(cmd) == 4 and cmd[1] == 'credit':
             self.user.add_accounts(
                 db_engine, account_type=2, description=cmd[0], credit_limit=cmd[2], discharge_day=cmd[3])
 
-    def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
+    async def reply_delete(self, update: Update, cmd, db_engine: dl.DB_Engine):
         pass
         # if len(cmd) < 1 or cmd[0] == 'help':
         #     self.reply_help(update.message, 'del')
@@ -375,7 +382,7 @@ class BotDialogAccounts(BotDialogOnetime):
         #     db_engine, [int(s) for s in cmd[0].split(',')])
         # self.reply_table(update)
 
-    def __set_account_description(self, update: Update):
+    async def __set_account_description(self, update: Update):
         names = ['Основной', 'Кредитка']
         keyboard_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(name, callback_data=f'{self.get_cmd_mask()} add {name}') for name in names]])
@@ -384,32 +391,32 @@ class BotDialogAccounts(BotDialogOnetime):
         self.is_wait_answer = True
 
         edit_text = not update.callback_query is None
-        self.reply_error(update.message, 'add', 'description empty',
-                         edit_text, reply_markup=keyboard_markup)
+        await self.reply_error(update.effective_message, 'add', 'description empty',
+                               edit_text, reply_markup=keyboard_markup)
 
-    def __set_account_type(self, update: Update, description):
+    async def __set_account_type(self, update: Update, description):
         types = ['debit', 'credit']
         keyboard_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(t, callback_data=f'{self.get_cmd_mask()} add {description} {t}') for t in types]])
 
         edit_text = not update.callback_query is None
-        self.reply_error(update.message, 'add', 'type empty',
-                         edit_text, reply_markup=keyboard_markup)
+        await self.reply_error(update.effective_message, 'add', 'type empty',
+                               edit_text, reply_markup=keyboard_markup)
 
-    def __set_credit_limit(self, update: Update, description):
+    async def __set_credit_limit(self, update: Update, description):
         self.is_wait_answer = True
         self.wait_answer_func = self.reply_add
         self.wait_answer_kwargs = {'prefix_command': [description, 'credit']}
 
-        self.reply_error(update.message, 'add', 'credit_limit empty')
+        await self.reply_error(update.effective_message, 'add', 'credit_limit empty')
 
-    def __set_discharge_day(self, update: Update, description, credit_limit):
+    async def __set_discharge_day(self, update: Update, description, credit_limit):
         self.is_wait_answer = True
         self.wait_answer_func = self.reply_add
         self.wait_answer_kwargs = {'prefix_command': [description,
                                                       'credit', credit_limit]}
 
-        self.reply_error(update.message, 'add', 'discharge_day empty')
+        await self.reply_error(update.effective_message, 'add', 'discharge_day empty')
 
 
 class BotDialogTransactions(BotDialog):
@@ -641,13 +648,13 @@ class UserManager:
                 events_today), parse_mode='html')
 
     def __create_bot_dialog(self, cmd, user):
-        if cmd == '/regular':
+        if cmd in ['/regular', '/re']:
             return BotDialogRegular(user)
-        elif cmd == '/onetime':
+        elif cmd in ['/onetime', '/on']:
             return BotDialogOnetime(user)
         elif cmd in ['/transactions', '/tr']:
             return BotDialogTransactions(user)
-        elif cmd == '/accounts':
+        elif cmd in ['/accounts', '/ac']:
             return BotDialogAccounts(user)
 
         return BotDialog(user)
