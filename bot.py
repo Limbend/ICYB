@@ -8,19 +8,20 @@ from dateutil.relativedelta import relativedelta
 from Manager import UserManager
 
 
-logging.basicConfig(format='%(asctime)-12s - %(name)-12s - %(levelname)-8s - %(message)s',
-                    level=logging.INFO, filename='.np.log')
+log_format = '%(asctime)-23s - %(levelname)-8s - %(name)-24s - %(message)s'
+logging.basicConfig(format=log_format, level=logging.INFO, filename='.np.log')
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    '%(asctime)-12s - %(name)-12s - %(levelname)-8s - %(message)s')
-console.setFormatter(formatter)
+console.setFormatter(logging.Formatter(log_format))
 logging.getLogger('').addHandler(console)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('main_bot')
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 L_TYPE = os.getenv('ICYB_L_TYPE', 'TEST')
 with open('./settings.np.json') as f:
     settings = json.load(f)
+
+logger.info(f'{L_TYPE=}')
 
 
 async def ping(update: Update, context: CallbackContext) -> None:
